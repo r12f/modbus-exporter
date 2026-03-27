@@ -2,7 +2,7 @@
 
 ## Overview
 
-All logging uses the [`tracing`](https://docs.rs/tracing) crate ecosystem. Output is directed to **syslog** by default via a `tracing-subscriber` syslog layer.
+All logging uses the [`tracing`](https://docs.rs/tracing) crate ecosystem.
 
 ## Crate Stack
 
@@ -10,7 +10,8 @@ All logging uses the [`tracing`](https://docs.rs/tracing) crate ecosystem. Outpu
 |-------|------|
 | `tracing` | Spans, events, `#[instrument]` macro |
 | `tracing-subscriber` | Subscriber/layer composition |
-| `tracing-syslog` | Syslog output layer (RFC 5424) |
+
+> **Note on syslog:** The `tracing-syslog` crate is not currently available on crates.io. As an interim solution, when `output` is set to `"syslog"` in the config, the exporter falls back to **structured JSON output on stderr**. This provides machine-parseable log output that can be consumed by syslog daemons (e.g., via `journald` or piped to `logger`). Native syslog support will be added when a suitable crate becomes available.
 
 ## Guidelines
 
@@ -60,15 +61,15 @@ Always include relevant context as span fields:
 | `DEBUG` | Operational detail | Poll results, decoded values, metric updates, export batch sizes |
 | `TRACE` | Wire-level detail | Raw Modbus request/response frames, raw register bytes |
 
-## Syslog Configuration
+## Output Configuration
 
-| Setting | Value |
-|---------|-------|
-| Facility | `daemon` (configurable) |
-| App name | `otel-modbus-exporter` |
-| Format | RFC 5424 structured data |
+The output layer is initialized at startup based on the `logging` section in `config.yaml`:
 
-The syslog layer is initialized at startup based on the `logging` section in `config.yaml`. When `output` is set to `stdout` or `stderr`, a `fmt` layer is used instead of syslog.
+| `output` value | Behavior |
+|----------------|----------|
+| `"stdout"` | Structured text format to stdout |
+| `"stderr"` | Structured text format to stderr |
+| `"syslog"` | **Fallback:** structured JSON to stderr (see note above) |
 
 ## Config Reference
 

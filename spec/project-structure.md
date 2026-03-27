@@ -39,20 +39,27 @@ otel-modbus-exporter/
 │   ├── main_tests.rs
 │   ├── config.rs                # Config structs, YAML deserialization, validation
 │   ├── config_tests.rs
-│   ├── modbus.rs                # ModbusClient trait, RTU and TCP client impls
-│   ├── modbus_tests.rs
+│   ├── modbus/
+│   │   ├── mod.rs               # ModbusClient trait
+│   │   ├── mod_tests.rs
+│   │   ├── tcp.rs               # TCP client impl
+│   │   ├── tcp_tests.rs
+│   │   ├── rtu.rs               # RTU client impl
+│   │   └── rtu_tests.rs
 │   ├── decoder.rs               # Byte order reordering, type conversion, scale/offset
 │   ├── decoder_tests.rs
-│   ├── logging.rs               # Tracing subscriber init, syslog layer setup
+│   ├── logging.rs               # Tracing subscriber init, output layer setup
 │   ├── logging_tests.rs
 │   ├── collector.rs             # Poll engine, per-collector async task
 │   ├── collector_tests.rs
 │   ├── metrics.rs               # MetricStore, MetricKey, MetricValue
 │   ├── metrics_tests.rs
-│   ├── export_otlp.rs           # OTLP protobuf/HTTP exporter
-│   ├── export_otlp_tests.rs
-│   ├── export_prometheus.rs     # Prometheus /metrics HTTP server
-│   └── export_prometheus_tests.rs
+│   ├── export/
+│   │   ├── mod.rs               # Export trait and shared types
+│   │   ├── otlp.rs              # OTLP protobuf/HTTP exporter
+│   │   ├── otlp_tests.rs
+│   │   ├── prometheus.rs        # Prometheus /metrics HTTP server
+│   │   └── prometheus_tests.rs
 └── tests/
     ├── integration_test.rs      # End-to-end with mock Modbus server
     └── e2e/
@@ -66,11 +73,11 @@ main
 ├── config
 ├── logging
 ├── collector
-│   ├── modbus
+│   ├── modbus (modbus::tcp, modbus::rtu)
 │   ├── decoder
 │   └── metrics
-├── export_otlp
+├── export::otlp
 │   └── metrics
-└── export_prometheus
+└── export::prometheus
     └── metrics
 ```

@@ -22,11 +22,11 @@ ci:
     - uses: dtolnay/rust-toolchain@stable
       with:
         components: rustfmt, clippy
-        targets: x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu
+        targets: aarch64-unknown-linux-gnu
     - run: cargo fmt --check
     - run: cargo clippy -- -D warnings
     - run: cargo test
-    - run: cargo build --release --target x86_64-unknown-linux-gnu
+    - run: cargo build --release
     - run: sudo apt-get install -y gcc-aarch64-linux-gnu
     - run: cargo build --release --target aarch64-unknown-linux-gnu
       env:

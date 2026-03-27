@@ -41,9 +41,13 @@ loop {
             }
         }
     }
-    // Merge: for metrics that failed, carry forward from previous cache
+    // Merge: for metrics that failed, carry forward from previous cache with fresh timestamp
     for (name, prev) in &prev_cache {
-        local_cache.entry(name.clone()).or_insert(prev.clone());
+        local_cache.entry(name.clone()).or_insert_with(|| {
+            let mut carried = prev.clone();
+            carried.updated_at = SystemTime::now(); // Fresh timestamp so exporters see current time
+            carried
+        });
     }
     // Atomically publish to shared store
     store.publish(&collector.name, &local_cache);

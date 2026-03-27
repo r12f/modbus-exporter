@@ -15,7 +15,7 @@ RUN cargo build --release
 ### Runtime Stage
 
 ```dockerfile
-FROM alpine:latest
+FROM alpine:3.20
 RUN apk add --no-cache ca-certificates
 COPY --from=builder /src/target/release/otel-modbus-exporter /usr/local/bin/
 ENTRYPOINT ["otel-modbus-exporter"]
