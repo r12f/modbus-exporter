@@ -233,6 +233,13 @@ async fn send_with_retry(
                     return Ok(());
                 }
 
+                // Extract Retry-After header before consuming body.
+                let retry_after_header = resp
+                    .headers()
+                    .get("retry-after")
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|v| v.trim().parse::<u64>().ok());
+
                 // Read response body for diagnostics before deciding on retry.
                 let resp_body = resp
                     .text()
@@ -245,8 +252,10 @@ async fn send_with_retry(
                             "OTLP export failed: HTTP 429 after {attempts} attempts: {resp_body}"
                         );
                     }
-                    // retry-after header already consumed above; parse from raw header
-                    let retry_after = backoff.next_delay();
+                    // Respect Retry-After header if present; fall back to exponential backoff.
+                    let retry_after = retry_after_header
+                        .map(Duration::from_secs)
+                        .unwrap_or_else(|| backoff.next_delay());
                     warn!(status, ?retry_after, %resp_body, "OTLP 429 — backing off");
                     tokio::select! {
                         _ = cancel.cancelled() => {

@@ -139,3 +139,64 @@ fn metric_store_integration() {
     assert!(flat[0].labels.contains_key("device"));
     assert!(flat[0].labels.contains_key("collector"));
 }
+
+#[tokio::test]
+async fn send_with_retry_respects_retry_after_header() {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    use std::sync::Arc;
+
+    let call_count = Arc::new(AtomicU32::new(0));
+    let call_count2 = call_count.clone();
+
+    // Start a mock server that returns 429 with Retry-After: 1 on the first call,
+    // then 200 on the second.
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    let server = tokio::spawn(async move {
+        loop {
+            let (stream, _) = listener.accept().await.unwrap();
+            let call_count2 = call_count2.clone();
+            tokio::spawn(async move {
+                let mut buf = [0u8; 4096];
+                let mut stream = stream;
+                use tokio::io::{AsyncReadExt, AsyncWriteExt};
+                let _ = stream.read(&mut buf).await;
+
+                let n = call_count2.fetch_add(1, Ordering::SeqCst);
+                let response = if n == 0 {
+                    "HTTP/1.1 429 Too Many Requests\r\nRetry-After: 1\r\nContent-Length: 11\r\n\r\nrate limited"
+                } else {
+                    "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n"
+                };
+                let _ = stream.write_all(response.as_bytes()).await;
+            });
+        }
+    });
+
+    let client = reqwest::Client::new();
+    let url = format!("http://{addr}/v1/metrics");
+    let cancel = tokio_util::sync::CancellationToken::new();
+    let start = std::time::Instant::now();
+
+    let result = send_with_retry(
+        &client,
+        &url,
+        &HashMap::new(),
+        vec![0u8; 10],
+        Duration::from_secs(5),
+        &cancel,
+    )
+    .await;
+
+    let elapsed = start.elapsed();
+    assert!(result.is_ok(), "expected success after retry: {result:?}");
+    assert_eq!(call_count.load(Ordering::SeqCst), 2);
+    // Should have waited ~1s (Retry-After: 1), not the default exponential backoff
+    assert!(
+        elapsed >= Duration::from_millis(900),
+        "should wait at least ~1s per Retry-After"
+    );
+
+    server.abort();
+}

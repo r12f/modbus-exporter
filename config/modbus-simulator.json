@@ -1,15 +1,45 @@
 {
-  "port": 5020,
-  "holding_registers": {
-    "0": 2300,
-    "16": 1,
-    "17": 24464,
-    "32": 17224,
-    "33": 0,
-    "48": 24464,
-    "49": 1
+  "server": {
+    "listenerAddress": "0.0.0.0",
+    "listenerPort": 5020,
+    "protocol": "TCP",
+    "tlsParams": {
+      "description": "path to certificate and private key to enable tls",
+      "privateKey": null,
+      "certificate": null
+    },
+    "logging": {
+      "format": "%(asctime)-15s %(threadName)-15s  %(levelname)-8s %(module)-15s:%(lineno)-8s %(message)s",
+      "logLevel": "INFO"
+    }
   },
-  "input_registers": {
-    "0": 65436
+  "persistence": {
+    "enabled": false,
+    "file": "/data/modbus_registers.json",
+    "saveInterval": 30
+  },
+  "metrics": {
+    "enabled": false,
+    "address": "0.0.0.0",
+    "port": 9091,
+    "path": "/metrics"
+  },
+  "registers": {
+    "description": "E2E test registers",
+    "initializeUndefinedRegisters": true,
+    "discreteInput": {},
+    "coils": {},
+    "holdingRegister": {
+      "1": 2300,
+      "17": 1,
+      "18": 24464,
+      "33": 17224,
+      "34": 0,
+      "49": 24464,
+      "50": 1
+    },
+    "inputRegister": {
+      "1": 65436
+    }
   }
 }
