@@ -194,6 +194,9 @@ impl Backoff {
 }
 
 /// Send a single export request with retry.
+///
+/// The `cancel` token makes backoff sleeps cancellation-aware so shutdown
+/// is not blocked for up to 30 s waiting on a retry delay.
 #[instrument(skip_all)]
 async fn send_with_retry(
     client: &reqwest::Client,
@@ -201,7 +204,12 @@ async fn send_with_retry(
     headers: &HashMap<String, String>,
     body: Vec<u8>,
     timeout: Duration,
+    cancel: &tokio_util::sync::CancellationToken,
 ) -> Result<()> {
+    // Convert to Bytes upfront so retries are O(1) clones instead of
+    // copying the entire Vec on every attempt.
+    let body: bytes::Bytes = body.into();
+
     let mut backoff = Backoff::new();
     let mut attempts: u32 = 0;
 
@@ -224,38 +232,53 @@ async fn send_with_retry(
                     debug!(status, "OTLP export succeeded");
                     return Ok(());
                 }
+
+                // Read response body for diagnostics before deciding on retry.
+                let resp_body = resp
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "<failed to read body>".to_string());
+
                 if status == 429 {
                     if attempts >= MAX_RETRIES {
-                        anyhow::bail!("OTLP export failed: HTTP 429 after {attempts} attempts");
+                        anyhow::bail!(
+                            "OTLP export failed: HTTP 429 after {attempts} attempts: {resp_body}"
+                        );
                     }
-                    let retry_after = resp
-                        .headers()
-                        .get("retry-after")
-                        .and_then(|v| v.to_str().ok())
-                        .and_then(|v| v.parse::<u64>().ok())
-                        .map(Duration::from_secs)
-                        .unwrap_or_else(|| backoff.next_delay());
-                    warn!(status, ?retry_after, "OTLP 429 — backing off");
-                    tokio::time::sleep(retry_after).await;
+                    // retry-after header already consumed above; parse from raw header
+                    let retry_after = backoff.next_delay();
+                    warn!(status, ?retry_after, %resp_body, "OTLP 429 — backing off");
+                    tokio::select! {
+                        _ = cancel.cancelled() => {
+                            anyhow::bail!("OTLP export cancelled during retry backoff");
+                        }
+                        _ = tokio::time::sleep(retry_after) => {}
+                    }
                     continue;
                 }
                 if status >= 500 {
                     if attempts >= MAX_RETRIES {
                         anyhow::bail!(
-                            "OTLP export failed: HTTP {status} after {attempts} attempts"
+                            "OTLP export failed: HTTP {status} after {attempts} attempts: {resp_body}"
                         );
                     }
                     let delay = backoff.next_delay();
-                    warn!(status, ?delay, "OTLP 5xx — retrying");
-                    tokio::time::sleep(delay).await;
+                    warn!(status, ?delay, %resp_body, "OTLP 5xx — retrying");
+                    tokio::select! {
+                        _ = cancel.cancelled() => {
+                            anyhow::bail!("OTLP export cancelled during retry backoff");
+                        }
+                        _ = tokio::time::sleep(delay) => {}
+                    }
                     continue;
                 }
                 // 4xx (not 429) — do not retry
                 error!(
                     status,
+                    %resp_body,
                     "OTLP export failed with client error — not retrying"
                 );
-                anyhow::bail!("OTLP export failed: HTTP {status}");
+                anyhow::bail!("OTLP export failed: HTTP {status}: {resp_body}");
             }
             Err(e) => {
                 if attempts >= MAX_RETRIES {
@@ -263,7 +286,12 @@ async fn send_with_retry(
                 }
                 let delay = backoff.next_delay();
                 warn!(?delay, error = %e, "OTLP export request error — retrying");
-                tokio::time::sleep(delay).await;
+                tokio::select! {
+                    _ = cancel.cancelled() => {
+                        anyhow::bail!("OTLP export cancelled during retry backoff");
+                    }
+                    _ = tokio::time::sleep(delay) => {}
+                }
             }
         }
     }
@@ -313,11 +341,14 @@ pub async fn run(
             &store,
             &global_labels,
             process_start,
+            &cancel,
         )
         .await;
     }
 
-    // Final flush on shutdown
+    // Final flush on shutdown — pass a non-cancelled token so the final
+    // flush can complete its retries without being immediately cancelled.
+    let flush_token = tokio_util::sync::CancellationToken::new();
     export_once(
         &client,
         &url,
@@ -325,6 +356,7 @@ pub async fn run(
         &store,
         &global_labels,
         process_start,
+        &flush_token,
     )
     .await;
     info!("OTLP exporter stopped");
@@ -338,6 +370,7 @@ async fn export_once(
     store: &MetricStore,
     global_labels: &HashMap<String, String>,
     process_start: SystemTime,
+    cancel: &tokio_util::sync::CancellationToken,
 ) {
     let metrics = store.all_metrics_flat();
     if metrics.is_empty() {
@@ -352,7 +385,9 @@ async fn export_once(
         "Exporting OTLP batch"
     );
 
-    if let Err(e) = send_with_retry(client, url, &config.headers, body, config.timeout).await {
+    if let Err(e) =
+        send_with_retry(client, url, &config.headers, body, config.timeout, cancel).await
+    {
         error!(error = %e, "OTLP export failed");
     }
 }
