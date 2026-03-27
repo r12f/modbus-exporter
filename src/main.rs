@@ -1,10 +1,10 @@
 #![allow(dead_code)]
-pub mod collector;
+mod collector;
 mod config;
 mod decoder;
-pub mod export;
+mod export;
 mod logging;
-pub mod metrics;
+mod metrics;
 mod modbus;
 
 use std::collections::BTreeMap;
