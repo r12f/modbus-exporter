@@ -31,7 +31,7 @@ impl ModbusClientFactory for RealModbusClientFactory {
             Protocol::Tcp { endpoint } => {
                 let addr: SocketAddr = endpoint
                     .parse()
-                    .unwrap_or_else(|_| panic!("invalid TCP endpoint: {endpoint}"));
+                    .expect("invalid TCP endpoint should have been caught by config validation");
                 Box::new(TcpClient::new(addr, collector.slave_id))
             }
             Protocol::Rtu {
@@ -78,7 +78,11 @@ fn map_logging_config(cfg: &config::Logging) -> LoggingConfig {
     let output = match cfg.output {
         config::LogOutput::Stdout => LogOutput::Stdout,
         config::LogOutput::Stderr => LogOutput::Stderr,
-        config::LogOutput::Syslog => LogOutput::Json, // syslog maps to structured JSON
+        // Syslog output is not yet implemented as a native syslog transport.
+        // We map it to structured JSON as an interim solution, because JSON
+        // is the closest machine-readable format and is easy to forward into
+        // syslog-compatible collectors (e.g. Vector, Fluentd, journald).
+        config::LogOutput::Syslog => LogOutput::Json,
     };
 
     LoggingConfig { level, output }
@@ -145,15 +149,8 @@ async fn main() -> Result<()> {
             let store = store.clone();
             let cancel = cancel.clone();
             prom_handle = Some(tokio::spawn(async move {
-                tokio::select! {
-                    result = export::prometheus::serve(&prom_cfg, store) => {
-                        if let Err(e) = result {
-                            error!(%e, "Prometheus exporter failed");
-                        }
-                    }
-                    _ = cancel.cancelled() => {
-                        info!("Prometheus exporter shutting down");
-                    }
+                if let Err(e) = export::prometheus::serve(&prom_cfg, store, cancel).await {
+                    error!(%e, "Prometheus exporter failed");
                 }
             }));
         }
