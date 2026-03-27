@@ -1,11 +1,21 @@
 use anyhow::{Context, Result};
+use async_trait::async_trait;
 use tokio_modbus::client::{rtu, Context as ModbusContext, Reader};
 use tokio_modbus::Slave;
 use tokio_serial::SerialPortBuilder;
 
-use super::ModbusClient;
+use super::{
+    validate_coil_count, validate_register_count, ModbusConnection, ModbusReader, READ_TIMEOUT,
+};
 
 /// Modbus RTU (serial) client.
+///
+/// # Half-duplex / concurrency
+///
+/// RTU operates over a half-duplex serial bus. All read methods take
+/// `&mut self`, which prevents concurrent access at compile time. Do **not**
+/// place an `RtuClient` behind a shared-mutable wrapper unless the wrapper
+/// holds the lock for the entire request–response cycle.
 pub struct RtuClient {
     builder: SerialPortBuilder,
     slave_id: u8,
@@ -14,9 +24,6 @@ pub struct RtuClient {
 
 impl RtuClient {
     /// Create a new RTU client (does not connect yet).
-    ///
-    /// `builder` is a [`tokio_serial::SerialPortBuilder`] configured with the
-    /// desired device path, baud rate, data bits, stop bits, and parity.
     pub fn new(builder: SerialPortBuilder, slave_id: u8) -> Self {
         Self {
             builder,
@@ -24,54 +31,140 @@ impl RtuClient {
             context: None,
         }
     }
+
+    fn ctx(&mut self) -> Result<&mut ModbusContext> {
+        self.context
+            .as_mut()
+            .with_context(|| format!("not connected (slave={})", self.slave_id))
+    }
 }
 
-impl ModbusClient for RtuClient {
+#[async_trait]
+impl ModbusConnection for RtuClient {
     async fn connect(&mut self) -> Result<()> {
+        if self.context.is_some() {
+            self.disconnect().await.ok();
+        }
         let port = tokio_serial::SerialStream::open(&self.builder)
-            .context("failed to open serial port")?;
+            .with_context(|| format!("failed to open serial port (slave={})", self.slave_id))?;
         let ctx = rtu::attach_slave(port, Slave(self.slave_id));
         self.context = Some(ctx);
+        Ok(())
+    }
+
+    async fn disconnect(&mut self) -> Result<()> {
+        self.context.take();
         Ok(())
     }
 
     fn is_connected(&self) -> bool {
         self.context.is_some()
     }
+}
 
+#[async_trait]
+impl ModbusReader for RtuClient {
     async fn read_holding_registers(&mut self, addr: u16, count: u16) -> Result<Vec<u16>> {
-        let ctx = self.context.as_mut().context("not connected")?;
-        let data = ctx
-            .read_holding_registers(addr, count)
-            .await?
-            .context("empty response")?;
+        validate_register_count(count)?;
+        let ctx = self.ctx()?;
+        let data = tokio::time::timeout(READ_TIMEOUT, ctx.read_holding_registers(addr, count))
+            .await
+            .with_context(|| {
+                format!(
+                    "read_holding_registers timed out (addr={addr}, count={count}, slave={})",
+                    self.slave_id
+                )
+            })?
+            .with_context(|| {
+                format!(
+                    "read_holding_registers failed (addr={addr}, count={count}, slave={})",
+                    self.slave_id
+                )
+            })?
+            .with_context(|| {
+                format!(
+                    "read_holding_registers empty response (addr={addr}, count={count}, slave={})",
+                    self.slave_id
+                )
+            })?;
         Ok(data)
     }
 
     async fn read_input_registers(&mut self, addr: u16, count: u16) -> Result<Vec<u16>> {
-        let ctx = self.context.as_mut().context("not connected")?;
-        let data = ctx
-            .read_input_registers(addr, count)
-            .await?
-            .context("empty response")?;
+        validate_register_count(count)?;
+        let ctx = self.ctx()?;
+        let data = tokio::time::timeout(READ_TIMEOUT, ctx.read_input_registers(addr, count))
+            .await
+            .with_context(|| {
+                format!(
+                    "read_input_registers timed out (addr={addr}, count={count}, slave={})",
+                    self.slave_id
+                )
+            })?
+            .with_context(|| {
+                format!(
+                    "read_input_registers failed (addr={addr}, count={count}, slave={})",
+                    self.slave_id
+                )
+            })?
+            .with_context(|| {
+                format!(
+                    "read_input_registers empty response (addr={addr}, count={count}, slave={})",
+                    self.slave_id
+                )
+            })?;
         Ok(data)
     }
 
     async fn read_coils(&mut self, addr: u16, count: u16) -> Result<Vec<bool>> {
-        let ctx = self.context.as_mut().context("not connected")?;
-        let data = ctx
-            .read_coils(addr, count)
-            .await?
-            .context("empty response")?;
+        validate_coil_count(count)?;
+        let ctx = self.ctx()?;
+        let data = tokio::time::timeout(READ_TIMEOUT, ctx.read_coils(addr, count))
+            .await
+            .with_context(|| {
+                format!(
+                    "read_coils timed out (addr={addr}, count={count}, slave={})",
+                    self.slave_id
+                )
+            })?
+            .with_context(|| {
+                format!(
+                    "read_coils failed (addr={addr}, count={count}, slave={})",
+                    self.slave_id
+                )
+            })?
+            .with_context(|| {
+                format!(
+                    "read_coils empty response (addr={addr}, count={count}, slave={})",
+                    self.slave_id
+                )
+            })?;
         Ok(data)
     }
 
     async fn read_discrete_inputs(&mut self, addr: u16, count: u16) -> Result<Vec<bool>> {
-        let ctx = self.context.as_mut().context("not connected")?;
-        let data = ctx
-            .read_discrete_inputs(addr, count)
-            .await?
-            .context("empty response")?;
+        validate_coil_count(count)?;
+        let ctx = self.ctx()?;
+        let data = tokio::time::timeout(READ_TIMEOUT, ctx.read_discrete_inputs(addr, count))
+            .await
+            .with_context(|| {
+                format!(
+                    "read_discrete_inputs timed out (addr={addr}, count={count}, slave={})",
+                    self.slave_id
+                )
+            })?
+            .with_context(|| {
+                format!(
+                    "read_discrete_inputs failed (addr={addr}, count={count}, slave={})",
+                    self.slave_id
+                )
+            })?
+            .with_context(|| {
+                format!(
+                    "read_discrete_inputs empty response (addr={addr}, count={count}, slave={})",
+                    self.slave_id
+                )
+            })?;
         Ok(data)
     }
 }
