@@ -85,7 +85,7 @@ pub fn build_request(
 
     // Scope
     let mut scope = Vec::new();
-    encode_ld(1, b"otel-modbus-exporter", &mut scope); // name
+    encode_ld(1, b"modbus-exporter", &mut scope); // name
 
     // Build Metric entries
     let mut otlp_metrics_buf = Vec::new();

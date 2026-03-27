@@ -51,8 +51,8 @@ fn build_request_gauge_roundtrip() {
         .windows(b"temperature".len())
         .any(|w| w == b"temperature"));
     assert!(body
-        .windows(b"otel-modbus-exporter".len())
-        .any(|w| w == b"otel-modbus-exporter"));
+        .windows(b"modbus-exporter".len())
+        .any(|w| w == b"modbus-exporter"));
     assert!(body
         .windows(b"service.name".len())
         .any(|w| w == b"service.name"));
