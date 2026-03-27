@@ -7,28 +7,20 @@
       "logLevel": "INFO"
     }
   },
-  "persistence": {
-    "enabled": false,
-    "file": "/data/modbus_registers.json",
-    "saveInterval": 30
-  },
-  "metrics": {
-    "enabled": false
-  },
   "registers": {
     "zeroMode": false,
     "initializeUndefinedRegisters": true,
     "holdingRegister": {
-      "1": "0x08FC",
-      "17": "0x0001",
-      "18": "0x5F90",
-      "33": "0x4348",
-      "34": "0x0000",
-      "49": "0x5F90",
-      "50": "0x0001"
+      "1": 2300,
+      "17": 1,
+      "18": 24464,
+      "33": 17224,
+      "34": 0,
+      "49": 24464,
+      "50": 1
     },
     "inputRegister": {
-      "1": "0xFF9C"
+      "1": 65436
     },
     "coils": {},
     "discreteInput": {}
