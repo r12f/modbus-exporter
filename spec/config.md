@@ -4,6 +4,10 @@
 
 Configuration is loaded from a YAML file specified via `--config` CLI flag. Default: `config.yaml` in the working directory.
 
+## Example
+
+See [`config/example.yaml`](../config/example.yaml) for a complete annotated example.
+
 ## Schema
 
 ### Top-level
