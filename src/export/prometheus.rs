@@ -85,7 +85,8 @@ fn render_metrics(store: &MetricStore) -> String {
             MetricType::Gauge => "gauge",
             MetricType::Counter => "counter",
         };
-        buf.push_str(&format!("# HELP {fqname} {}\n", first.description));
+        let escaped_desc = first.description.replace('\\', "\\\\").replace('\n', "\\n");
+        buf.push_str(&format!("# HELP {fqname} {escaped_desc}\n"));
         buf.push_str(&format!("# TYPE {fqname} {type_str}\n"));
         for m in values {
             buf.push_str(&format_metric_line(fqname, &m.labels, m.value));
