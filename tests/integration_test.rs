@@ -1,4 +1,4 @@
-//! Integration tests for otel-modbus-exporter.
+//! Integration tests for modbus-exporter.
 
 use std::collections::BTreeMap;
 use std::io::Write;

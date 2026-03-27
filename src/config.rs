@@ -9,7 +9,7 @@ use std::time::Duration;
 use tracing::info;
 
 #[derive(Parser, Debug)]
-#[command(name = "otel-modbus-exporter")]
+#[command(name = "modbus-exporter")]
 pub struct Cli {
     /// Path to the configuration file
     #[arg(short, long, default_value = "config.yaml")]
