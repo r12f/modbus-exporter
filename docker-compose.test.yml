@@ -16,6 +16,16 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "=== Debug: config file ===" &&
+        ls -la /etc/otel-modbus-exporter/ &&
+        cat /etc/otel-modbus-exporter/config.yaml | head -5 &&
+        echo "=== Debug: binary ===" &&
+        ls -la /usr/local/bin/otel-modbus-exporter &&
+        echo "=== Debug: starting ===" &&
+        exec /usr/local/bin/otel-modbus-exporter --config /etc/otel-modbus-exporter/config.yaml
     volumes:
       - ./config/test.yaml:/etc/otel-modbus-exporter/config.yaml:ro
     ports:
