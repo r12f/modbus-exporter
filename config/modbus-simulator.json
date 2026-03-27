@@ -4,23 +4,31 @@
     "listenerPort": 5020,
     "logging": {
       "format": "%(asctime)-15s %(threadName)-15s %(levelname)-8s %(module)-15s:%(lineno)-8s %(message)s",
-      "logLevel": "DEBUG"
+      "logLevel": "INFO"
     }
   },
+  "persistence": {
+    "enabled": false,
+    "file": "/data/modbus_registers.json",
+    "saveInterval": 30
+  },
+  "metrics": {
+    "enabled": false
+  },
   "registers": {
-    "zeroMode": true,
+    "zeroMode": false,
     "initializeUndefinedRegisters": true,
     "holdingRegister": {
-      "0": 2300,
-      "16": 1,
-      "17": 24464,
-      "32": 17224,
-      "33": 0,
-      "48": 24464,
-      "49": 1
+      "1": "0x08FC",
+      "17": "0x0001",
+      "18": "0x5F90",
+      "33": "0x4348",
+      "34": "0x0000",
+      "49": "0x5F90",
+      "50": "0x0001"
     },
     "inputRegister": {
-      "0": 65436
+      "1": "0xFF9C"
     },
     "coils": {},
     "discreteInput": {}
