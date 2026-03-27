@@ -9,6 +9,9 @@ use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tracing::{debug, error, info, instrument, warn};
 
+/// Maximum number of retry attempts for retryable errors (429, 5xx, network).
+const MAX_RETRIES: u32 = 3;
+
 // ── OTLP protobuf wire types ──────────────────────────────────────────
 // We hand-roll minimal protobuf encoding to avoid pulling in the full
 // opentelemetry-proto crate which has heavy gRPC deps.  The wire format
@@ -64,7 +67,14 @@ fn system_time_to_nanos(t: SystemTime) -> u64 {
 }
 
 /// Build `ExportMetricsServiceRequest` protobuf bytes from a flat metric list.
-pub fn build_request(metrics: &[MetricValue], global_labels: &HashMap<String, String>) -> Vec<u8> {
+///
+/// `process_start` is recorded at process startup and used as
+/// `start_time_unix_nano` for cumulative Sum data points.
+pub fn build_request(
+    metrics: &[MetricValue],
+    global_labels: &HashMap<String, String>,
+    process_start: SystemTime,
+) -> Vec<u8> {
     // Resource (resource.proto)
     let mut resource = Vec::new();
     let mut sorted_labels: Vec<_> = global_labels.iter().collect();
@@ -97,6 +107,10 @@ pub fn build_request(metrics: &[MetricValue], global_labels: &HashMap<String, St
             encode_ld(1, v.as_bytes(), &mut any);
             encode_ld(2, &any, &mut kv);
             encode_ld(7, &kv, &mut dp);
+        }
+        // start_time_unix_nano (field 2) — required for cumulative Sum
+        if m.metric_type == MetricType::Counter {
+            encode_fixed64(2, system_time_to_nanos(process_start), &mut dp);
         }
         encode_fixed64(3, system_time_to_nanos(m.updated_at), &mut dp); // time_unix_nano
         encode_double(4, m.value, &mut dp); // as_double (field 4)
@@ -140,7 +154,7 @@ pub fn build_request(metrics: &[MetricValue], global_labels: &HashMap<String, St
 
 // ── HTTP push + retry ─────────────────────────────────────────────────
 
-/// Retry / backoff state.
+/// Retry / backoff state with jitter.
 struct Backoff {
     current: Duration,
     max: Duration,
@@ -154,10 +168,24 @@ impl Backoff {
         }
     }
 
+    /// Return the next delay with ±25% random jitter applied.
     fn next_delay(&mut self) -> Duration {
-        let d = self.current;
+        let base = self.current;
         self.current = (self.current * 2).min(self.max);
-        d
+        // Apply ±25% jitter
+        let base_ms = base.as_millis() as u64;
+        let jitter_range = base_ms / 4; // 25%
+        if jitter_range == 0 {
+            return base;
+        }
+        // Simple deterministic-seed-free jitter using current time nanos
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .subsec_nanos() as u64;
+        let offset = nanos % (jitter_range * 2 + 1);
+        let jittered = base_ms - jitter_range + offset;
+        Duration::from_millis(jittered)
     }
 
     fn reset(&mut self) {
@@ -175,8 +203,10 @@ async fn send_with_retry(
     timeout: Duration,
 ) -> Result<()> {
     let mut backoff = Backoff::new();
+    let mut attempts: u32 = 0;
 
     loop {
+        attempts += 1;
         let mut req = client
             .post(url)
             .header("Content-Type", "application/x-protobuf")
@@ -195,6 +225,9 @@ async fn send_with_retry(
                     return Ok(());
                 }
                 if status == 429 {
+                    if attempts >= MAX_RETRIES {
+                        anyhow::bail!("OTLP export failed: HTTP 429 after {attempts} attempts");
+                    }
                     let retry_after = resp
                         .headers()
                         .get("retry-after")
@@ -207,6 +240,11 @@ async fn send_with_retry(
                     continue;
                 }
                 if status >= 500 {
+                    if attempts >= MAX_RETRIES {
+                        anyhow::bail!(
+                            "OTLP export failed: HTTP {status} after {attempts} attempts"
+                        );
+                    }
                     let delay = backoff.next_delay();
                     warn!(status, ?delay, "OTLP 5xx — retrying");
                     tokio::time::sleep(delay).await;
@@ -220,6 +258,9 @@ async fn send_with_retry(
                 anyhow::bail!("OTLP export failed: HTTP {status}");
             }
             Err(e) => {
+                if attempts >= MAX_RETRIES {
+                    anyhow::bail!("OTLP export failed after {attempts} attempts: {e}");
+                }
                 let delay = backoff.next_delay();
                 warn!(?delay, error = %e, "OTLP export request error — retrying");
                 tokio::time::sleep(delay).await;
@@ -231,6 +272,7 @@ async fn send_with_retry(
 // ── Public API ─────────────────────────────────────────────────────────
 
 /// Start the periodic OTLP push loop.  Runs until the token is cancelled.
+/// Performs one final flush on shutdown.
 #[instrument(skip_all, fields(endpoint))]
 pub async fn run(
     config: OtlpExporter,
@@ -247,9 +289,10 @@ pub async fn run(
     };
     let url = format!("{endpoint}/v1/metrics");
     let client = reqwest::Client::new();
-    let interval_dur = Duration::from_secs(10);
+    let interval_dur = config.interval;
+    let process_start = SystemTime::now();
 
-    info!(%url, "OTLP exporter started");
+    info!(%url, ?interval_dur, "OTLP exporter started");
 
     let mut interval = tokio::time::interval(interval_dur);
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -257,29 +300,60 @@ pub async fn run(
     loop {
         tokio::select! {
             _ = cancel.cancelled() => {
-                info!("OTLP exporter shutting down");
-                return;
+                info!("OTLP exporter shutting down — performing final flush");
+                break;
             }
             _ = interval.tick() => {}
         }
 
-        let metrics = store.all_metrics_flat();
-        if metrics.is_empty() {
-            debug!("No metrics to export");
-            continue;
-        }
+        export_once(
+            &client,
+            &url,
+            &config,
+            &store,
+            &global_labels,
+            process_start,
+        )
+        .await;
+    }
 
-        let body = build_request(&metrics, &global_labels);
-        debug!(
-            metrics_count = metrics.len(),
-            bytes = body.len(),
-            "Exporting OTLP batch"
-        );
+    // Final flush on shutdown
+    export_once(
+        &client,
+        &url,
+        &config,
+        &store,
+        &global_labels,
+        process_start,
+    )
+    .await;
+    info!("OTLP exporter stopped");
+}
 
-        if let Err(e) = send_with_retry(&client, &url, &config.headers, body, config.timeout).await
-        {
-            error!(error = %e, "OTLP export failed");
-        }
+/// Export current metrics once.
+async fn export_once(
+    client: &reqwest::Client,
+    url: &str,
+    config: &OtlpExporter,
+    store: &MetricStore,
+    global_labels: &HashMap<String, String>,
+    process_start: SystemTime,
+) {
+    let metrics = store.all_metrics_flat();
+    if metrics.is_empty() {
+        debug!("No metrics to export");
+        return;
+    }
+
+    let body = build_request(&metrics, global_labels, process_start);
+    debug!(
+        metrics_count = metrics.len(),
+        bytes = body.len(),
+        "Exporting OTLP batch"
+    );
+
+    if let Err(e) = send_with_retry(client, url, &config.headers, body, config.timeout).await {
+        error!(error = %e, "OTLP export failed");
     }
 }
 

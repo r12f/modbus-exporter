@@ -31,7 +31,11 @@ fn sample_counter() -> MetricValue {
 
 #[test]
 fn build_request_empty_metrics() {
-    let body = build_request(&[], &std::collections::HashMap::new());
+    let body = build_request(
+        &[],
+        &std::collections::HashMap::new(),
+        SystemTime::UNIX_EPOCH,
+    );
     // Should produce a valid (minimal) protobuf — at least the outer envelope
     assert!(!body.is_empty());
 }
@@ -41,7 +45,7 @@ fn build_request_gauge_roundtrip() {
     let metrics = vec![sample_gauge()];
     let mut global = std::collections::HashMap::new();
     global.insert("service.name".to_string(), "test".to_string());
-    let body = build_request(&metrics, &global);
+    let body = build_request(&metrics, &global, SystemTime::UNIX_EPOCH);
     // The body must contain the metric name and scope name as raw bytes
     assert!(body
         .windows(b"temperature".len())
@@ -57,7 +61,11 @@ fn build_request_gauge_roundtrip() {
 #[test]
 fn build_request_counter_has_sum_fields() {
     let metrics = vec![sample_counter()];
-    let body = build_request(&metrics, &std::collections::HashMap::new());
+    let body = build_request(
+        &metrics,
+        &std::collections::HashMap::new(),
+        SystemTime::UNIX_EPOCH,
+    );
     assert!(body
         .windows(b"energy_total".len())
         .any(|w| w == b"energy_total"));
@@ -66,7 +74,11 @@ fn build_request_counter_has_sum_fields() {
 #[test]
 fn build_request_mixed_metrics() {
     let metrics = vec![sample_gauge(), sample_counter()];
-    let body = build_request(&metrics, &std::collections::HashMap::new());
+    let body = build_request(
+        &metrics,
+        &std::collections::HashMap::new(),
+        SystemTime::UNIX_EPOCH,
+    );
     assert!(body
         .windows(b"temperature".len())
         .any(|w| w == b"temperature"));
@@ -78,15 +90,27 @@ fn build_request_mixed_metrics() {
 #[test]
 fn backoff_progression() {
     let mut b = Backoff::new();
-    assert_eq!(b.next_delay(), std::time::Duration::from_secs(1));
-    assert_eq!(b.next_delay(), std::time::Duration::from_secs(2));
-    assert_eq!(b.next_delay(), std::time::Duration::from_secs(4));
-    assert_eq!(b.next_delay(), std::time::Duration::from_secs(8));
-    assert_eq!(b.next_delay(), std::time::Duration::from_secs(16));
-    assert_eq!(b.next_delay(), std::time::Duration::from_secs(30)); // capped
-    assert_eq!(b.next_delay(), std::time::Duration::from_secs(30));
+    // With ±25% jitter, 1s base → 750ms..1250ms
+    let d1 = b.next_delay();
+    assert!(
+        d1 >= std::time::Duration::from_millis(750) && d1 <= std::time::Duration::from_millis(1250)
+    );
+    let d2 = b.next_delay(); // base 2s → 1500..2500
+    assert!(
+        d2 >= std::time::Duration::from_millis(1500)
+            && d2 <= std::time::Duration::from_millis(2500)
+    );
+    let d3 = b.next_delay(); // base 4s → 3000..5000
+    assert!(
+        d3 >= std::time::Duration::from_millis(3000)
+            && d3 <= std::time::Duration::from_millis(5000)
+    );
     b.reset();
-    assert_eq!(b.next_delay(), std::time::Duration::from_secs(1));
+    let d_reset = b.next_delay();
+    assert!(
+        d_reset >= std::time::Duration::from_millis(750)
+            && d_reset <= std::time::Duration::from_millis(1250)
+    );
 }
 
 #[test]
