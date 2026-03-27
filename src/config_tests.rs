@@ -1030,7 +1030,7 @@ fn test_parse_mqtt_minimal() {
     assert!(mqtt.enabled);
     assert_eq!(mqtt.endpoint.unwrap(), "mqtt://broker.local:1883");
     assert_eq!(mqtt.topic_prefix, "modbus/metrics");
-    assert_eq!(mqtt.qos, 0);
+    assert_eq!(mqtt.qos, 1);
     assert!(!mqtt.retain);
     assert_eq!(mqtt.interval.as_secs(), 10);
 }

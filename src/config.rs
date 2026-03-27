@@ -185,7 +185,7 @@ fn default_mqtt_topic_prefix() -> String {
 }
 
 fn default_mqtt_qos() -> u8 {
-    0
+    1
 }
 
 fn default_mqtt_interval() -> Duration {
@@ -193,7 +193,7 @@ fn default_mqtt_interval() -> Duration {
 }
 
 fn default_mqtt_timeout() -> Duration {
-    Duration::from_secs(10)
+    Duration::from_secs(5)
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -571,6 +571,13 @@ impl Config {
             }
             if mqtt.qos > 2 {
                 bail!("mqtt qos must be 0, 1, or 2, got {}", mqtt.qos);
+            }
+            if let Some(tls) = &mqtt.tls {
+                let has_cert = tls.client_cert.is_some();
+                let has_key = tls.client_key.is_some();
+                if has_cert != has_key {
+                    bail!("mqtt tls: client_cert and client_key must both be set for mutual TLS");
+                }
             }
         }
         if self.collectors.is_empty() {

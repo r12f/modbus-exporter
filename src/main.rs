@@ -188,7 +188,7 @@ async fn main() -> Result<()> {
             let store = store.clone();
             let cancel = cancel.clone();
             mqtt_handle = Some(tokio::spawn(async move {
-                export::mqtt::run_mqtt_exporter(mqtt_cfg, Arc::new(store), cancel).await;
+                export::mqtt::run_mqtt_exporter(mqtt_cfg, store, cancel).await;
             }));
         }
     }
