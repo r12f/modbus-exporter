@@ -35,7 +35,7 @@ struct MetricValue {
     labels: BTreeMap<String, String>,
     description: String,
     unit: String,
-    updated_at: Instant,
+    updated_at: SystemTime, // Wall-clock time; needed for OTLP time_unix_nano
 }
 ```
 

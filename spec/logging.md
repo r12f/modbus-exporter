@@ -2,7 +2,7 @@
 
 ## Overview
 
-All logging uses the [`tracing`](https://docs.rs/tracing) crate ecosystem. Output is directed to **syslog** by default via a `tracing-subscriber` syslog layer.
+All logging uses the [`tracing`](https://docs.rs/tracing) crate ecosystem.
 
 ## Crate Stack
 
@@ -10,7 +10,8 @@ All logging uses the [`tracing`](https://docs.rs/tracing) crate ecosystem. Outpu
 |-------|------|
 | `tracing` | Spans, events, `#[instrument]` macro |
 | `tracing-subscriber` | Subscriber/layer composition |
-| `tracing-syslog` | Syslog output layer (RFC 5424) |
+
+> **Note on syslog:** Native syslog support is not currently implemented. The `output` config accepts `"json"` which produces **structured JSON output on stderr**, suitable for consumption by syslog daemons (e.g., via `journald` or piped to `logger`). Native syslog support is planned for a future release.
 
 ## Guidelines
 
@@ -60,15 +61,15 @@ Always include relevant context as span fields:
 | `DEBUG` | Operational detail | Poll results, decoded values, metric updates, export batch sizes |
 | `TRACE` | Wire-level detail | Raw Modbus request/response frames, raw register bytes |
 
-## Syslog Configuration
+## Output Configuration
 
-| Setting | Value |
-|---------|-------|
-| Facility | `daemon` (configurable) |
-| App name | `otel-modbus-exporter` |
-| Format | RFC 5424 structured data |
+The output layer is initialized at startup based on the `logging` section in `config.yaml`:
 
-The syslog layer is initialized at startup based on the `logging` section in `config.yaml`. When `output` is set to `stdout` or `stderr`, a `fmt` layer is used instead of syslog.
+| `output` value | Behavior |
+|----------------|----------|
+| `"stdout"` | Structured text format to stdout |
+| `"stderr"` | Structured text format to stderr |
+| `"json"` | Structured JSON to stderr (suitable for journald/syslog ingestion) |
 
 ## Config Reference
 
@@ -77,6 +78,5 @@ See [config.md](config.md) for the `logging` YAML section:
 ```yaml
 logging:
   level: "info"              # trace|debug|info|warn|error
-  output: "syslog"           # syslog|stdout|stderr
-  syslog_facility: "daemon"
+  output: "json"             # json|stdout|stderr
 ```
