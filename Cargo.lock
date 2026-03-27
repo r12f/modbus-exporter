@@ -1053,7 +1053,7 @@ dependencies = [
 
 [[package]]
 name = "modbus-exporter"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "async-trait",
