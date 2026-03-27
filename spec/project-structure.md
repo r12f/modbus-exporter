@@ -15,6 +15,10 @@ otel-modbus-exporter/
 ├── Makefile
 ├── README.md
 ├── config.yaml                  # Example config
+├── config/
+│   ├── test.yaml                # Exporter config for E2E tests
+│   └── modbus-simulator.json    # Simulator register config for E2E tests
+├── docker-compose.test.yml      # E2E test compose stack
 ├── spec/
 │   ├── ci.md
 │   ├── collector.md
@@ -28,7 +32,8 @@ otel-modbus-exporter/
 │   ├── modbus.md
 │   ├── project-structure.md
 │   ├── publish.md
-│   └── testing.md
+│   ├── testing.md
+│   └── e2e-testing.md
 ├── src/
 │   ├── main.rs                  # CLI entry point, config loading, task orchestration
 │   ├── main_tests.rs
@@ -49,7 +54,9 @@ otel-modbus-exporter/
 │   ├── export_prometheus.rs     # Prometheus /metrics HTTP server
 │   └── export_prometheus_tests.rs
 └── tests/
-    └── integration_test.rs      # End-to-end with mock Modbus server
+    ├── integration_test.rs      # End-to-end with mock Modbus server
+    └── e2e/
+        └── run.sh               # E2E test script (docker-compose based)
 ```
 
 ## Module Dependency Graph

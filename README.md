@@ -104,6 +104,7 @@ make fmt            # cargo fmt
 make lint           # cargo clippy -- -D warnings
 make test           # cargo test
 make docker         # docker buildx build (amd64 + arm64)
+make e2e            # run E2E tests (docker-compose)
 make clean          # cargo clean
 ```
 

@@ -41,3 +41,9 @@ Located in `tests/` directory.
 3. **Multiple collectors**: Run 2+ collectors simultaneously against different mock servers.
 4. **Invalid config**: Verify startup fails with clear error messages.
 5. **Scale/offset**: Verify decoded values match expected transformed output.
+
+## E2E Tests
+
+E2E tests validate the full pipeline using real Docker containers rather than in-process mocks. They use `oitc/modbus-server` as a Modbus TCP simulator with pre-loaded register values, and assert against the Prometheus `/metrics` endpoint.
+
+See [e2e-testing.md](e2e-testing.md) for the full E2E testing specification.
