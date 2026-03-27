@@ -1,9 +1,8 @@
 services:
   modbus-simulator:
     image: oitc/modbus-server
-    command: ["-f", "/server_config.json"]
     volumes:
-      - ./config/modbus-simulator.json:/server_config.json:ro
+      - ./config/modbus-simulator.json:/app/modbus_server.json:ro
     ports:
       - "5020:5020"
     healthcheck:
