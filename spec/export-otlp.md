@@ -4,6 +4,8 @@
 
 Exports metrics to an OpenTelemetry Collector via OTLP protobuf over HTTP (POST to `/v1/metrics`).
 
+**The OTLP exporter is a pure consumer.** It reads exclusively from the in-memory `MetricStore` (which aggregates per-collector caches). It never triggers Modbus calls or interacts with collectors directly.
+
 ## Protocol
 
 - Transport: HTTP/1.1

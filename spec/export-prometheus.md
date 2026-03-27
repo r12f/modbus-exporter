@@ -4,6 +4,8 @@
 
 An HTTP server (using `axum`) serves a Prometheus-compatible `/metrics` endpoint for scraping.
 
+**The Prometheus exporter is a pure consumer.** It reads exclusively from the in-memory `MetricStore` (which aggregates per-collector caches). It never triggers Modbus calls. When a scrape request arrives, it reads the current cached values and formats them — no Modbus I/O occurs.
+
 ## HTTP Server
 
 - Built with `axum`.

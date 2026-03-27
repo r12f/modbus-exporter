@@ -4,12 +4,23 @@
 
 Each collector runs as an independent async task (tokio::spawn) that periodically polls a Modbus device and updates the in-memory metric store.
 
+## Per-Collector Cache
+
+Each collector maintains its own **local cache** (`CollectorCache`) — a `HashMap<String, MetricValue>` keyed by metric name. This cache holds the latest decoded values from the most recent successful poll cycle.
+
+After each complete poll cycle, the collector **atomically publishes** its cache snapshot to the shared `MetricStore` via `store.publish(collector_name, cache_snapshot)`. This is the **only write path** into the metric store. Exporters (OTLP, Prometheus) are pure readers — they never trigger Modbus calls.
+
+This strict **producer/consumer separation** ensures:
+- Modbus I/O is fully contained within collector tasks.
+- Exporters see a consistent snapshot, never partial poll results.
+- A slow or failing collector cannot block or delay metric export.
+
 ## Poll Engine Design
 
 ### One Task Per Collector
 
 - On startup, spawn one `tokio::task` per configured collector.
-- Each task owns its Modbus client connection.
+- Each task owns its Modbus client connection **and** its local `CollectorCache`.
 - Tasks are independent — a failure in one collector does not affect others.
 
 ### Polling Loop
@@ -17,15 +28,27 @@ Each collector runs as an independent async task (tokio::spawn) that periodicall
 ```
 loop {
     let start = Instant::now();
+    let mut local_cache = HashMap::new();
+    let mut had_error = false;
     for metric in &collector.metrics {
         match read_metric(&mut client, metric).await {
-            Ok(value) => store.update(metric, value),
+            Ok(value) => { local_cache.insert(metric.name.clone(), value); },
             Err(e) => {
+                had_error = true;
                 log per-metric error;
                 increment error counter;
+                // Retain previous cached value (not inserted into local_cache)
             }
         }
     }
+    // Merge: for metrics that failed, carry forward from previous cache
+    for (name, prev) in &prev_cache {
+        local_cache.entry(name.clone()).or_insert(prev.clone());
+    }
+    // Atomically publish to shared store
+    store.publish(&collector.name, &local_cache);
+    prev_cache = local_cache;
+
     let elapsed = start.elapsed();
     if elapsed < polling_interval {
         sleep(polling_interval - elapsed).await;
