@@ -14,6 +14,8 @@ use crate::modbus::ModbusClient;
 const MAX_BACKOFF: Duration = Duration::from_secs(60);
 /// Initial backoff duration for reconnection attempts.
 const INITIAL_BACKOFF: Duration = Duration::from_secs(1);
+/// Default shutdown timeout.
+pub const DEFAULT_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Map config types to decoder/metrics types.
 fn map_byte_order(bo: config::ByteOrder) -> decoder::ByteOrder {
@@ -75,11 +77,10 @@ async fn read_metric(client: &mut dyn ModbusClient, metric: &config::Metric) -> 
                 .read_coils(metric.address, 1)
                 .await
                 .context("reading coils")?;
-            let raw = if *bits.first().unwrap_or(&false) {
-                1.0
-            } else {
-                0.0
-            };
+            let val = bits
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("empty coil response"))?;
+            let raw = if *val { 1.0 } else { 0.0 };
             Ok(raw * metric.scale + metric.offset)
         }
         RegisterType::Discrete => {
@@ -87,11 +88,10 @@ async fn read_metric(client: &mut dyn ModbusClient, metric: &config::Metric) -> 
                 .read_discrete_inputs(metric.address, 1)
                 .await
                 .context("reading discrete inputs")?;
-            let raw = if *bits.first().unwrap_or(&false) {
-                1.0
-            } else {
-                0.0
-            };
+            let val = bits
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("empty discrete input response"))?;
+            let raw = if *val { 1.0 } else { 0.0 };
             Ok(raw * metric.scale + metric.offset)
         }
     }
@@ -112,6 +112,7 @@ async fn run_collector(
         .map(|(k, v)| (k.clone(), v.clone()))
         .collect();
     let mut prev_cache: HashMap<String, MetricValue> = HashMap::new();
+    let mut error_counts: HashMap<String, u64> = HashMap::new();
     let mut backoff = INITIAL_BACKOFF;
     let poll_interval = collector.polling_interval;
     let warn_threshold = poll_interval.mul_f64(0.8);
@@ -128,7 +129,10 @@ async fn run_collector(
                 error!(error = %e, backoff_secs = backoff.as_secs(), "connection failed, retrying");
                 tokio::select! {
                     _ = tokio::time::sleep(backoff) => {}
-                    _ = shutdown_rx.changed() => { return; }
+                    _ = shutdown_rx.changed() => {
+                        let _ = client.disconnect().await;
+                        return;
+                    }
                 }
                 backoff = (backoff * 2).min(MAX_BACKOFF);
             }
@@ -144,6 +148,7 @@ async fn run_collector(
             // Check shutdown between metrics
             if *shutdown_rx.borrow() {
                 info!("shutdown requested, exiting");
+                let _ = client.disconnect().await;
                 return;
             }
 
@@ -169,7 +174,9 @@ async fn run_collector(
                         connection_error = true;
                         break;
                     }
-                    warn!(metric = %metric_cfg.name, error = %e, "metric read failed, retaining previous value");
+                    let count = error_counts.entry(metric_cfg.name.clone()).or_insert(0);
+                    *count += 1;
+                    warn!(metric = %metric_cfg.name, error = %e, error_count = *count, "metric read failed, retaining previous value");
                 }
             }
         }
@@ -180,7 +187,10 @@ async fn run_collector(
                 let _ = client.disconnect().await;
                 tokio::select! {
                     _ = tokio::time::sleep(backoff) => {}
-                    _ = shutdown_rx.changed() => { return; }
+                    _ = shutdown_rx.changed() => {
+                        let _ = client.disconnect().await;
+                        return;
+                    }
                 }
                 backoff = (backoff * 2).min(MAX_BACKOFF);
                 match client.connect().await {
@@ -200,11 +210,34 @@ async fn run_collector(
         // Successful poll cycle — reset backoff
         backoff = INITIAL_BACKOFF;
 
-        // Merge: carry forward previous values for failed metrics
+        // Merge: carry forward previous values for failed metrics, updating timestamp
+        let now = SystemTime::now();
         for (name, prev) in &prev_cache {
+            local_cache.entry(name.clone()).or_insert_with(|| {
+                let mut carried = prev.clone();
+                carried.updated_at = now;
+                carried
+            });
+        }
+
+        // Publish per-metric error counts to store
+        for (metric_name, &count) in &error_counts {
             local_cache
-                .entry(name.clone())
-                .or_insert_with(|| prev.clone());
+                .entry(format!("{}_errors", metric_name))
+                .or_insert_with(|| MetricValue {
+                    name: format!("{}_errors", metric_name),
+                    value: count as f64,
+                    metric_type: MetricType::Counter,
+                    labels: BTreeMap::new(),
+                    description: format!("Error count for metric {}", metric_name),
+                    unit: String::new(),
+                    updated_at: now,
+                });
+            // Update existing error counter value
+            if let Some(m) = local_cache.get_mut(&format!("{}_errors", metric_name)) {
+                m.value = count as f64;
+                m.updated_at = now;
+            }
         }
 
         // Publish to store
@@ -232,6 +265,7 @@ async fn run_collector(
                 _ = tokio::time::sleep(remaining) => {}
                 _ = shutdown_rx.changed() => {
                     info!("shutdown requested");
+                    let _ = client.disconnect().await;
                     return;
                 }
             }
@@ -239,6 +273,7 @@ async fn run_collector(
             // Check shutdown even if no sleep
             if *shutdown_rx.borrow() {
                 info!("shutdown requested");
+                let _ = client.disconnect().await;
                 return;
             }
         }
