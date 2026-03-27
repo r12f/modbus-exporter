@@ -2,27 +2,13 @@
   "server": {
     "listenerAddress": "0.0.0.0",
     "listenerPort": 5020,
-    "tlsParams": {
-      "description": "path to certificate and private key to enable tls",
-      "privateKey": null,
-      "certificate": null
-    },
     "logging": {
       "format": "%(asctime)-15s %(threadName)-15s %(levelname)-8s %(module)-15s:%(lineno)-8s %(message)s",
-      "logLevel": "INFO"
+      "logLevel": "DEBUG"
     }
   },
-  "persistence": {
-    "enabled": false,
-    "file": "/data/modbus_registers.json",
-    "saveInterval": 30
-  },
-  "metrics": {
-    "enabled": false
-  },
   "registers": {
-    "description": "Test registers for E2E testing",
-    "zeroMode": false,
+    "zeroMode": true,
     "initializeUndefinedRegisters": true,
     "holdingRegister": {
       "0": 2300,
