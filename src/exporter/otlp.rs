@@ -514,6 +514,73 @@ async fn export_once(
     }
 }
 
+// ── MetricExporter trait impl ─────────────────────────────────────────
+
+use crate::config::MetricConfig;
+use async_trait::async_trait;
+
+/// OTLP exporter that implements [`super::MetricExporter`].
+///
+/// Wraps the existing push logic.  Each call to [`export()`] performs a
+/// single OTLP push with the supplied metrics/results.
+pub struct OtlpMetricExporter {
+    config: OtlpExporterConfig,
+    client: reqwest::Client,
+    url: String,
+    process_start: SystemTime,
+    cancel: tokio_util::sync::CancellationToken,
+}
+
+impl OtlpMetricExporter {
+    pub fn new(config: OtlpExporterConfig) -> Result<Self> {
+        let endpoint = config
+            .endpoint
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("OTLP exporter enabled but no endpoint configured"))?
+            .trim_end_matches('/')
+            .to_string();
+        let url = format!("{endpoint}/v1/metrics");
+        Ok(Self {
+            config,
+            client: reqwest::Client::new(),
+            url,
+            process_start: SystemTime::now(),
+            cancel: tokio_util::sync::CancellationToken::new(),
+        })
+    }
+}
+
+#[async_trait]
+impl super::MetricExporter for OtlpMetricExporter {
+    async fn export(
+        &mut self,
+        metrics: &[MetricConfig],
+        results: &HashMap<String, Result<f64>>,
+    ) -> Result<()> {
+        let metric_values = super::results_to_metric_values(metrics, results);
+
+        if metric_values.is_empty() {
+            return Ok(());
+        }
+
+        let body = build_request(&metric_values, &HashMap::new(), self.process_start);
+        send_with_retry(
+            &self.client,
+            &self.url,
+            &self.config.headers,
+            body,
+            self.config.timeout,
+            &self.cancel,
+        )
+        .await
+    }
+
+    async fn shutdown(&mut self) -> Result<()> {
+        self.cancel.cancel();
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 #[path = "otlp_tests.rs"]
 mod tests;

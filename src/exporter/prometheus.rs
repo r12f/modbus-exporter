@@ -156,6 +156,58 @@ pub async fn serve(
     Ok(())
 }
 
+// ── MetricExporter trait impl ─────────────────────────────────────────
+
+use crate::config::MetricConfig;
+use async_trait::async_trait;
+
+/// Prometheus exporter that implements [`super::MetricExporter`].
+///
+/// Since Prometheus is pull-based, [`export()`] updates an internal
+/// [`MetricStore`] that the HTTP handler reads on scrape.  The caller
+/// must start the HTTP server separately via [`store()`].
+pub struct PrometheusMetricExporter {
+    store: MetricStore,
+    _config: PrometheusExporterConfig,
+}
+
+impl PrometheusMetricExporter {
+    pub fn new(config: PrometheusExporterConfig) -> Self {
+        Self {
+            store: MetricStore::new(),
+            _config: config,
+        }
+    }
+
+    /// Access the underlying store (e.g. for starting the HTTP server).
+    pub fn store(&self) -> &MetricStore {
+        &self.store
+    }
+}
+
+#[async_trait]
+impl super::MetricExporter for PrometheusMetricExporter {
+    async fn export(
+        &mut self,
+        metrics: &[MetricConfig],
+        results: &std::collections::HashMap<String, anyhow::Result<f64>>,
+    ) -> anyhow::Result<()> {
+        let values = super::results_to_metric_values(metrics, results);
+
+        self.store.publish(
+            "trait",
+            values,
+            &std::collections::BTreeMap::new(),
+            &std::collections::BTreeMap::new(),
+        );
+        Ok(())
+    }
+
+    async fn shutdown(&mut self) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 #[path = "prometheus_tests.rs"]
 mod tests;
