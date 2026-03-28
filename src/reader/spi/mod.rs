@@ -97,8 +97,8 @@ impl SpiDevice for StubSpiDevice {
     }
 }
 
-/// SPI client wrapping a device for async read operations.
-pub struct SpiClient {
+/// SPI metric reader that wraps a device for async read operations.
+pub struct SpiMetricReader {
     device: Arc<std::sync::Mutex<Box<dyn SpiDevice>>>,
     device_path: String,
     connected: bool,
@@ -116,7 +116,7 @@ pub fn get_device_lock(device_path: &str) -> DeviceLock {
         .clone()
 }
 
-impl SpiClient {
+impl SpiMetricReader {
     pub fn new(device: Box<dyn SpiDevice>, device_path: String) -> Self {
         Self {
             device: Arc::new(std::sync::Mutex::new(device)),
@@ -137,7 +137,7 @@ impl SpiClient {
 
 /// Read a single SPI metric.
 pub async fn read_spi_metric(
-    client: &SpiClient,
+    client: &SpiMetricReader,
     metric: &config::MetricConfig,
     device_lock: &DeviceLock,
 ) -> Result<f64> {
@@ -183,9 +183,9 @@ pub async fn read_spi_metric(
         .map_err(|e| anyhow::anyhow!("{e}"))
 }
 
-/// Connection/lifecycle trait impl for SpiClient (mirrors BusConnection).
+/// Connection and lifecycle trait implementation for `SpiMetricReader`.
 #[async_trait]
-impl crate::reader::modbus::BusConnection for SpiClient {
+impl crate::reader::modbus::BusConnection for SpiMetricReader {
     async fn connect(&mut self) -> Result<()> {
         self.connected = true;
         Ok(())

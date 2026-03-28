@@ -16,7 +16,7 @@ use crate::reader::i2c::{self, I2cMetricReader};
 use crate::reader::i3c;
 use crate::reader::modbus::batch::{batch_read_coalesced, BatchReadResult};
 use crate::reader::modbus::{BusConnection, ModbusClient};
-use crate::reader::spi::{self, SpiClient};
+use crate::reader::spi::{self, SpiMetricReader};
 
 /// Maximum backoff duration for reconnection attempts.
 const MAX_BACKOFF: Duration = Duration::from_secs(60);
@@ -41,7 +41,7 @@ pub enum BusClient {
         bus_lock: i2c::BusLock,
     },
     Spi {
-        client: SpiClient,
+        client: SpiMetricReader,
         device_lock: spi::DeviceLock,
     },
     I3c {
