@@ -22,7 +22,7 @@ use config::{find_config_file, Cli, Config, Protocol};
 use internal_metrics::InternalMetrics;
 use logging::{init_logging, LogOutput, LoggingConfig};
 use metrics::MetricStore;
-use reader::modbus::{rtu::RtuClient, tcp::ModbusTcpMetricReader};
+use reader::modbus::{rtu::ModbusRtuMetricReader, tcp::ModbusTcpMetricReader};
 
 // ── Real Modbus client factory ────────────────────────────────────────
 
@@ -62,7 +62,7 @@ impl BusClientFactory for RealBusClientFactory {
                         config::Parity::Even => tokio_serial::Parity::Even,
                         config::Parity::Odd => tokio_serial::Parity::Odd,
                     });
-                Ok(BusClient::Modbus(Box::new(RtuClient::new(
+                Ok(BusClient::Modbus(Box::new(ModbusRtuMetricReader::new(
                     builder, slave_id,
                 ))))
             }
