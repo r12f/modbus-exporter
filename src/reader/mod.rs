@@ -1,3 +1,4 @@
+pub mod decoder;
 pub mod i2c;
 pub mod i3c;
 pub mod modbus;

@@ -98,8 +98,8 @@ pub(crate) async fn read_modbus_metric(
     use crate::config::RegisterType;
 
     let count = metric.data_type.register_count();
-    let data_type = crate::bus::map_data_type(metric.data_type);
-    let byte_order = crate::bus::map_byte_order(metric.byte_order);
+    let data_type = crate::reader::decoder::map_data_type(metric.data_type);
+    let byte_order = crate::reader::decoder::map_byte_order(metric.byte_order);
     let register_type = metric.register_type.unwrap_or(RegisterType::Holding);
 
     match register_type {
@@ -108,16 +108,28 @@ pub(crate) async fn read_modbus_metric(
                 .read_holding_registers(metric.address.unwrap(), count)
                 .await
                 .context("reading holding registers")?;
-            crate::decoder::decode(&regs, data_type, byte_order, metric.scale, metric.offset)
-                .map_err(|e| anyhow::anyhow!("{e}"))
+            crate::reader::decoder::decode(
+                &regs,
+                data_type,
+                byte_order,
+                metric.scale,
+                metric.offset,
+            )
+            .map_err(|e| anyhow::anyhow!("{e}"))
         }
         RegisterType::Input => {
             let regs = client
                 .read_input_registers(metric.address.unwrap(), count)
                 .await
                 .context("reading input registers")?;
-            crate::decoder::decode(&regs, data_type, byte_order, metric.scale, metric.offset)
-                .map_err(|e| anyhow::anyhow!("{e}"))
+            crate::reader::decoder::decode(
+                &regs,
+                data_type,
+                byte_order,
+                metric.scale,
+                metric.offset,
+            )
+            .map_err(|e| anyhow::anyhow!("{e}"))
         }
         RegisterType::Coil => {
             let bits = client

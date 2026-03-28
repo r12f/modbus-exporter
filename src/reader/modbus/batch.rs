@@ -10,9 +10,8 @@ mod batch_tests;
 use anyhow::Result;
 use tracing::warn;
 
-use crate::bus;
 use crate::config::{self, RegisterType};
-use crate::decoder;
+use crate::reader::decoder;
 
 use super::{ModbusReader, MAX_REGISTERS_PER_READ};
 
@@ -101,8 +100,8 @@ fn decode_metric(metric: &config::MetricConfig, regs: &[u16], range_start: u16) 
         );
     }
     let slice = &regs[offset_in_buf..end];
-    let data_type = bus::map_data_type(metric.data_type);
-    let byte_order = bus::map_byte_order(metric.byte_order);
+    let data_type = decoder::map_data_type(metric.data_type);
+    let byte_order = decoder::map_byte_order(metric.byte_order);
     decoder::decode(slice, data_type, byte_order, metric.scale, metric.offset)
         .map_err(|e| anyhow::anyhow!("{e}"))
 }
@@ -114,8 +113,8 @@ async fn read_single(reader: &mut dyn ModbusReader, metric: &config::MetricConfi
         .ok_or_else(|| anyhow::anyhow!("metric '{}' has no address", metric.name))?;
     let count = metric.data_type.register_count();
     let register_type = metric.register_type.unwrap_or(RegisterType::Holding);
-    let data_type = bus::map_data_type(metric.data_type);
-    let byte_order = bus::map_byte_order(metric.byte_order);
+    let data_type = decoder::map_data_type(metric.data_type);
+    let byte_order = decoder::map_byte_order(metric.byte_order);
 
     match register_type {
         RegisterType::Holding => {
