@@ -129,7 +129,7 @@ A collector must have at least one metric after merging `metrics_files` and `met
 |-------|------|----------|---------|-------------|
 | `type` | `string` | Yes | — | Must be `"i2c"` |
 | `bus` | `string` | Yes | — | I2C bus device path (e.g., `/dev/i2c-1`) |
-| `address` | `u16` | Yes | — | 7-bit device address (`0x03`–`0x77`) |
+| `address` | `u8` | Yes | — | 7-bit device address (`0x03`–`0x77`) |
 
 See [i2c.md](i2c.md) for full I2C specification.
 

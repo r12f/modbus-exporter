@@ -44,7 +44,7 @@ collectors:
 |-------|------|----------|---------|-------------|
 | `type` | `string` | Yes | — | Must be `"i2c"` |
 | `bus` | `string` | Yes | — | I2C bus device path (e.g., `/dev/i2c-1`) |
-| `address` | `u16` | Yes | — | 7-bit I2C device address (`0x03`–`0x77`) |
+| `address` | `u8` | Yes | — | 7-bit I2C device address (`0x03`–`0x77`) |
 
 ### Metric Fields (I2C-specific)
 
@@ -55,7 +55,7 @@ I2C metrics reuse the standard `Metric` schema with these differences:
 | `register_type` | `holding`/`input`/`coil`/`discrete` | **Not used** — omit or ignore |
 | `address` | Modbus register address | I2C register address (0x00–0xFF) |
 | `data_type` | Same | Same: `u8`, `u16`, `i16`, `u32`, `i32`, `f32`, `u64`, `i64`, `f64`, `bool` |
-| `byte_order` | Same | Same (applies to multi-byte reads) |
+| `byte_order` | Same | Same (applies to multi-byte reads). `mid_big_endian`/`mid_little_endian` are Modbus-specific — use only `big_endian`/`little_endian` for I2C. |
 
 **New data type**: `u8` — single byte read, common in I2C. Not available in Modbus
 (which is 16-bit register based).

@@ -63,7 +63,7 @@ read is a **command → response** transfer. SPI metrics use different addressin
 | `response_length` | `u16` | No | auto | Total response bytes. Defaults to `command` length since SPI is full-duplex (TX and RX are the same length). Set explicitly if response is longer than command. |
 | `response_offset` | `u16` | No | `0` | Skip first N bytes of response before decoding |
 | `data_type` | `string` | Yes | — | `u8`, `u16`, `i16`, `u32`, `i32`, `f32`, `u64`, `i64`, `f64`, `bool` |
-| `byte_order` | `string` | No | `"big_endian"` | Byte order for multi-byte values |
+| `byte_order` | `string` | No | `"big_endian"` | `big_endian` or `little_endian` only (`mid_*` are Modbus-specific) |
 | `scale` | `f64` | No | `1.0` | Scale factor |
 | `offset` | `f64` | No | `0.0` | Additive offset |
 | `unit` | `string` | No | `""` | Unit label |
@@ -113,6 +113,7 @@ concern like I2C. However:
 - **Device not found**: SPI device file doesn't exist → error on startup.
 - **Permission denied**: Clear error suggesting `udev` rules or group membership.
 - **Transfer failure**: Kernel ioctl error → `read_error`, reported to collector.
+- **Timeout**: SPI transfers are synchronous at the kernel level with no user-configurable timeout. The `spawn_blocking` wrapper uses the collector's `polling_interval` as an implicit upper bound.
 - All errors include context: collector name, device path, command bytes.
 
 ## Validation Rules
