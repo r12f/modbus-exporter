@@ -3,7 +3,7 @@ mod bus;
 mod collector;
 mod config;
 mod decoder;
-mod export;
+mod exporter;
 mod i2c;
 mod i3c;
 mod internal_metrics;
@@ -247,7 +247,8 @@ async fn main() -> Result<()> {
             let cancel = cancel.clone();
             let im = Arc::clone(&internal_metrics);
             prom_handle = Some(tokio::spawn(async move {
-                if let Err(e) = export::prometheus::serve(&prom_cfg, store, cancel, Some(im)).await
+                if let Err(e) =
+                    exporter::prometheus::serve(&prom_cfg, store, cancel, Some(im)).await
                 {
                     error!(%e, "Prometheus exporter failed");
                 }
@@ -265,7 +266,7 @@ async fn main() -> Result<()> {
             let cancel = cancel.clone();
             let im = Arc::clone(&internal_metrics);
             otlp_handle = Some(tokio::spawn(async move {
-                export::otlp::run(otlp_cfg, store, global_labels, cancel, Some(im)).await;
+                exporter::otlp::run(otlp_cfg, store, global_labels, cancel, Some(im)).await;
             }));
         }
     }
@@ -278,7 +279,7 @@ async fn main() -> Result<()> {
             let store = store.clone();
             let cancel = cancel.clone();
             mqtt_handle = Some(tokio::spawn(async move {
-                export::mqtt::run_mqtt_exporter(mqtt_cfg, store, cancel).await;
+                exporter::mqtt::run_mqtt_exporter(mqtt_cfg, store, cancel).await;
             }));
         }
     }
