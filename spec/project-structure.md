@@ -80,10 +80,17 @@ main
 ├── logging
 ├── collector
 │   ├── modbus (modbus::tcp, modbus::rtu)
+│   ├── i2c
+│   ├── spi
+│   ├── i3c
+│   ├── bus (shared helpers)
 │   ├── decoder
 │   └── metrics
+├── internal_metrics
 ├── export::otlp
 │   └── metrics
-└── export::prometheus
+├── export::prometheus
+│   └── metrics
+└── export::mqtt
     └── metrics
 ```
