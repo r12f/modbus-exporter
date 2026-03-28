@@ -8,21 +8,21 @@ use super::{
     validate_coil_count, validate_register_count, BusConnection, ModbusReader, READ_TIMEOUT,
 };
 
-/// Modbus RTU (serial) client.
+/// Modbus RTU (serial) metric reader.
 ///
 /// # Half-duplex / concurrency
 ///
 /// RTU operates over a half-duplex serial bus. All read methods take
 /// `&mut self`, which prevents concurrent access at compile time. Do **not**
-/// place an `RtuClient` behind a shared-mutable wrapper unless the wrapper
+/// place an `ModbusRtuMetricReader` behind a shared-mutable wrapper unless the wrapper
 /// holds the lock for the entire request–response cycle.
-pub struct RtuClient {
+pub struct ModbusRtuMetricReader {
     builder: SerialPortBuilder,
     slave_id: u8,
     context: Option<ModbusContext>,
 }
 
-impl RtuClient {
+impl ModbusRtuMetricReader {
     /// Create a new RTU client (does not connect yet).
     pub fn new(builder: SerialPortBuilder, slave_id: u8) -> Self {
         Self {
@@ -40,7 +40,7 @@ impl RtuClient {
 }
 
 #[async_trait]
-impl BusConnection for RtuClient {
+impl BusConnection for ModbusRtuMetricReader {
     async fn connect(&mut self) -> Result<()> {
         if self.context.is_some() {
             self.disconnect().await.ok();
@@ -63,7 +63,7 @@ impl BusConnection for RtuClient {
 }
 
 #[async_trait]
-impl ModbusReader for RtuClient {
+impl ModbusReader for ModbusRtuMetricReader {
     async fn read_holding_registers(&mut self, addr: u16, count: u16) -> Result<Vec<u16>> {
         validate_register_count(count)?;
         let ctx = self.ctx()?;
