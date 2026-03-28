@@ -22,7 +22,7 @@ use config::{find_config_file, Cli, Config, Protocol};
 use internal_metrics::InternalMetrics;
 use logging::{init_logging, LogOutput, LoggingConfig};
 use metrics::MetricStore;
-use reader::modbus::{rtu::RtuClient, tcp::TcpClient};
+use reader::modbus::{rtu::RtuClient, tcp::ModbusTcpMetricReader};
 
 // ── Real Modbus client factory ────────────────────────────────────────
 
@@ -33,7 +33,7 @@ impl BusClientFactory for RealBusClientFactory {
         match &collector.protocol {
             Protocol::ModbusTcp { endpoint } => {
                 let slave_id = collector.slave_id.unwrap_or(1);
-                Ok(BusClient::Modbus(Box::new(TcpClient::new(
+                Ok(BusClient::Modbus(Box::new(ModbusTcpMetricReader::new(
                     endpoint.clone(),
                     slave_id,
                 ))))
