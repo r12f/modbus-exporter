@@ -8,7 +8,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use anyhow::Result;
-use bus_exporter::config::{ByteOrder, Config, DataType, Metric, MetricType};
+use bus_exporter::config::{ByteOrder, Config, DataType, MetricConfig, MetricType};
 use bus_exporter::reader::i3c::{AddressMode, I3cClient, I3cDevice};
 
 // ── Mock Device ─────────────────────────────────────────────────────
@@ -51,8 +51,8 @@ fn make_metric(
     byte_order: ByteOrder,
     scale: f64,
     offset: f64,
-) -> Metric {
-    Metric {
+) -> MetricConfig {
+    MetricConfig {
         name: name.to_string(),
         description: String::new(),
         metric_type: MetricType::Gauge,

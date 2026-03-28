@@ -1,7 +1,7 @@
 //! Unit and integration tests for batch read coalescing.
 
 use super::*;
-use crate::config::{ByteOrder, DataType, Metric, MetricType, RegisterType};
+use crate::config::{ByteOrder, DataType, MetricConfig, MetricType, RegisterType};
 use crate::reader::modbus::{BusConnection, ModbusReader};
 use anyhow::{bail, Result};
 use async_trait::async_trait;
@@ -87,8 +87,8 @@ impl ModbusReader for MockBatchClient {
     }
 }
 
-fn make_metric(name: &str, addr: u16, data_type: DataType, reg_type: RegisterType) -> Metric {
-    Metric {
+fn make_metric(name: &str, addr: u16, data_type: DataType, reg_type: RegisterType) -> MetricConfig {
+    MetricConfig {
         name: name.to_string(),
         description: String::new(),
         metric_type: MetricType::Gauge,

@@ -1,5 +1,5 @@
 use super::*;
-use crate::config::{ByteOrder, DataType, Metric, MetricType};
+use crate::config::{ByteOrder, DataType, MetricConfig, MetricType};
 use std::sync::{Arc, Mutex};
 
 /// Mock I3C device with configurable responses.
@@ -39,8 +39,13 @@ impl I3cDevice for MockI3cDevice {
     }
 }
 
-fn make_metric(name: &str, address: u8, data_type: DataType, byte_order: ByteOrder) -> Metric {
-    Metric {
+fn make_metric(
+    name: &str,
+    address: u8,
+    data_type: DataType,
+    byte_order: ByteOrder,
+) -> MetricConfig {
+    MetricConfig {
         name: name.to_string(),
         description: String::new(),
         metric_type: MetricType::Gauge,

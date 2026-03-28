@@ -57,9 +57,9 @@ pub struct Config {
     #[serde(default)]
     pub global_labels: HashMap<String, String>,
     #[serde(default)]
-    pub logging: Logging,
-    pub exporters: Exporters,
-    pub collectors: Vec<Collector>,
+    pub logging: LoggingConfig,
+    pub exporters: ExportersConfig,
+    pub collectors: Vec<CollectorConfig>,
 }
 
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq)]
@@ -96,7 +96,7 @@ pub enum SyslogFacility {
 
 #[derive(Debug, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
-pub struct Logging {
+pub struct LoggingConfig {
     #[serde(default = "default_log_level")]
     pub level: LogLevel,
     #[serde(default = "default_log_output")]
@@ -105,7 +105,7 @@ pub struct Logging {
     pub syslog_facility: SyslogFacility,
 }
 
-impl Default for Logging {
+impl Default for LoggingConfig {
     fn default() -> Self {
         Self {
             level: default_log_level(),
@@ -127,18 +127,18 @@ fn default_syslog_facility() -> SyslogFacility {
 
 #[derive(Debug, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
-pub struct Exporters {
+pub struct ExportersConfig {
     #[serde(default)]
-    pub otlp: Option<OtlpExporter>,
+    pub otlp: Option<OtlpExporterConfig>,
     #[serde(default)]
-    pub prometheus: Option<PrometheusExporter>,
+    pub prometheus: Option<PrometheusExporterConfig>,
     #[serde(default)]
-    pub mqtt: Option<MqttExporter>,
+    pub mqtt: Option<MqttExporterConfig>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
-pub struct OtlpExporter {
+pub struct OtlpExporterConfig {
     #[serde(default)]
     pub enabled: bool,
     #[serde(default)]
@@ -161,7 +161,7 @@ fn default_otlp_timeout() -> Duration {
 
 #[derive(Debug, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
-pub struct PrometheusExporter {
+pub struct PrometheusExporterConfig {
     #[serde(default)]
     pub enabled: bool,
     #[serde(default = "default_prom_listen")]
@@ -179,15 +179,15 @@ fn default_prom_path() -> String {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct MqttExporter {
+pub struct MqttExporterConfig {
     #[serde(default)]
     pub enabled: bool,
     pub endpoint: Option<String>,
     pub client_id: Option<String>,
     #[serde(default = "default_mqtt_topic_prefix")]
     pub topic_prefix: String,
-    pub auth: Option<MqttAuth>,
-    pub tls: Option<MqttTls>,
+    pub auth: Option<MqttAuthConfig>,
+    pub tls: Option<MqttTlsConfig>,
     #[serde(default = "default_mqtt_qos")]
     pub qos: u8,
     #[serde(default)]
@@ -200,14 +200,14 @@ pub struct MqttExporter {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct MqttAuth {
+pub struct MqttAuthConfig {
     pub username: String,
     pub password: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct MqttTls {
+pub struct MqttTlsConfig {
     pub ca_cert: Option<String>,
     pub client_cert: Option<String>,
     pub client_key: Option<String>,
@@ -233,7 +233,7 @@ fn default_mqtt_timeout() -> Duration {
 
 #[derive(Debug, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
-pub struct Collector {
+pub struct CollectorConfig {
     pub name: String,
     pub protocol: Protocol,
     #[serde(default)]
@@ -245,7 +245,7 @@ pub struct Collector {
     #[serde(default)]
     pub metrics_files: Option<Vec<String>>,
     #[serde(default)]
-    pub metrics: Vec<Metric>,
+    pub metrics: Vec<MetricConfig>,
     #[serde(default)]
     pub batch_read: bool,
 }
@@ -328,7 +328,7 @@ pub enum Parity {
 
 #[derive(Debug, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
-pub struct Metric {
+pub struct MetricConfig {
     pub name: String,
     #[serde(default)]
     pub description: String,
@@ -428,16 +428,16 @@ pub enum ByteOrder {
 /// Metrics file for reusable metric definitions.
 #[derive(Debug, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
-pub struct MetricsFile {
+pub struct MetricsFileConfig {
     #[serde(default)]
-    pub defaults: Option<MetricDefaults>,
-    pub metrics: Vec<RawMetric>,
+    pub defaults: Option<MetricDefaultsConfig>,
+    pub metrics: Vec<RawMetricConfig>,
 }
 
 /// Default values applied to all metrics in a metrics file.
 #[derive(Debug, Deserialize, Clone, Default)]
 #[serde(deny_unknown_fields)]
-pub struct MetricDefaults {
+pub struct MetricDefaultsConfig {
     #[serde(default)]
     pub description: Option<String>,
     #[serde(rename = "type")]
@@ -454,7 +454,7 @@ pub struct MetricDefaults {
 /// Required fields are filled from defaults or must be present.
 #[derive(Debug, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
-pub struct RawMetric {
+pub struct RawMetricConfig {
     pub name: String,
     pub description: Option<String>,
     #[serde(rename = "type")]
@@ -474,14 +474,14 @@ pub struct RawMetric {
     pub response_offset: u16,
 }
 
-impl RawMetric {
-    /// Apply defaults and convert to a full Metric.
+impl RawMetricConfig {
+    /// Apply defaults and convert to a full MetricConfig.
     fn into_metric(
         self,
-        defaults: &Option<MetricDefaults>,
+        defaults: &Option<MetricDefaultsConfig>,
         collector_name: &str,
         file_path: &str,
-    ) -> Result<Metric> {
+    ) -> Result<MetricConfig> {
         let d = defaults.as_ref();
 
         let metric_type = self
@@ -510,7 +510,7 @@ impl RawMetric {
                 )
             })?;
 
-        Ok(Metric {
+        Ok(MetricConfig {
             name: self.name,
             description: self
                 .description
@@ -543,10 +543,10 @@ impl RawMetric {
     }
 }
 
-impl Collector {
+impl CollectorConfig {
     /// Load and merge metrics from metrics_files and inline metrics.
     pub fn resolve_metrics_files(&mut self, config_dir: &Path) -> Result<()> {
-        let mut merged: IndexMap<String, Metric> = IndexMap::new();
+        let mut merged: IndexMap<String, MetricConfig> = IndexMap::new();
 
         let files = match &self.metrics_files {
             Some(f) if !f.is_empty() => f.clone(),
@@ -568,13 +568,14 @@ impl Collector {
                 )
             })?;
 
-            let metrics_file: MetricsFile = serde_yaml::from_str(&content).with_context(|| {
-                format!(
-                    "collector '{}': parsing metrics file '{}'",
-                    self.name,
-                    file_path.display()
-                )
-            })?;
+            let metrics_file: MetricsFileConfig =
+                serde_yaml::from_str(&content).with_context(|| {
+                    format!(
+                        "collector '{}': parsing metrics file '{}'",
+                        self.name,
+                        file_path.display()
+                    )
+                })?;
 
             if metrics_file.metrics.is_empty() {
                 bail!(

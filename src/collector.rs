@@ -90,7 +90,7 @@ impl BusClient {
 
 /// Read a single metric from the Modbus client.
 #[instrument(skip(client), fields(metric = %metric.name))]
-async fn read_metric(client: &mut dyn ModbusClient, metric: &config::Metric) -> Result<f64> {
+async fn read_metric(client: &mut dyn ModbusClient, metric: &config::MetricConfig) -> Result<f64> {
     let count = metric.data_type.register_count();
     let data_type = bus::map_data_type(metric.data_type);
     let byte_order = bus::map_byte_order(metric.byte_order);
@@ -139,7 +139,7 @@ async fn read_metric(client: &mut dyn ModbusClient, metric: &config::Metric) -> 
 }
 
 /// Read a single metric from any bus client.
-async fn read_bus_metric(client: &mut BusClient, metric: &config::Metric) -> Result<f64> {
+async fn read_bus_metric(client: &mut BusClient, metric: &config::MetricConfig) -> Result<f64> {
     match client {
         BusClient::Modbus(c) => read_metric(c.as_mut(), metric).await,
         BusClient::I2c { client, bus_lock } => i2c::read_i2c_metric(client, metric, bus_lock).await,
@@ -155,7 +155,7 @@ async fn read_bus_metric(client: &mut BusClient, metric: &config::Metric) -> Res
 #[instrument(skip_all, fields(collector = %collector.name))]
 async fn run_collector(
     mut client: BusClient,
-    collector: config::Collector,
+    collector: config::CollectorConfig,
     store: MetricStore,
     global_labels: BTreeMap<String, String>,
     mut shutdown_rx: watch::Receiver<bool>,
@@ -441,7 +441,7 @@ async fn run_collector(
 /// Factory trait for creating bus clients from config.
 /// This allows tests to inject mock clients.
 pub trait BusClientFactory: Send + Sync {
-    fn create(&self, collector: &config::Collector) -> Result<BusClient>;
+    fn create(&self, collector: &config::CollectorConfig) -> Result<BusClient>;
 }
 
 /// Handle for managing all collector tasks.
@@ -453,7 +453,7 @@ pub struct CollectorEngine {
 impl CollectorEngine {
     /// Spawn one async task per collector. Returns a handle for shutdown.
     pub fn spawn(
-        collectors: Vec<config::Collector>,
+        collectors: Vec<config::CollectorConfig>,
         store: MetricStore,
         global_labels: BTreeMap<String, String>,
         factory: &dyn BusClientFactory,

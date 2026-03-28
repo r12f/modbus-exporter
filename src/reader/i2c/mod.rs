@@ -139,7 +139,7 @@ impl I2cClient {
 /// Read a single I2C metric.
 pub async fn read_i2c_metric(
     client: &I2cClient,
-    metric: &config::Metric,
+    metric: &config::MetricConfig,
     bus_lock: &BusLock,
 ) -> Result<f64> {
     let data_type = bus::map_data_type(metric.data_type);

@@ -5,7 +5,7 @@ use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
-use crate::config::MqttExporter;
+use crate::config::MqttExporterConfig;
 use crate::metrics::MetricStore;
 
 fn qos_from_u8(q: u8) -> QoS {
@@ -62,7 +62,7 @@ fn parse_endpoint(endpoint: &str) -> (String, u16, bool) {
 }
 
 fn build_tls_config(
-    tls_cfg: Option<&crate::config::MqttTls>,
+    tls_cfg: Option<&crate::config::MqttTlsConfig>,
 ) -> Result<rumqttc::TlsConfiguration, String> {
     let ca = match tls_cfg.and_then(|t| t.ca_cert.as_ref()) {
         Some(path) => {
@@ -90,7 +90,7 @@ fn build_tls_config(
 }
 
 pub async fn run_mqtt_exporter(
-    config: MqttExporter,
+    config: MqttExporterConfig,
     store: MetricStore,
     cancel: CancellationToken,
 ) {

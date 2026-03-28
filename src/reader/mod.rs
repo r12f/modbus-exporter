@@ -6,7 +6,7 @@ pub mod spi;
 use anyhow::Result;
 use async_trait::async_trait;
 
-use crate::config::Metric as MetricConfig;
+use crate::config::MetricConfig;
 
 /// Describes optional capabilities of a [`MetricReader`] implementation.
 #[derive(Debug, Clone, Copy)]

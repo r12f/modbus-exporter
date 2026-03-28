@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, instrument};
 
-use crate::config::PrometheusExporter;
+use crate::config::PrometheusExporterConfig;
 use crate::internal_metrics::InternalMetrics;
 use crate::metrics::{MetricStore, MetricType, MetricValue};
 
@@ -128,7 +128,7 @@ async fn metrics_handler(State(state): State<Arc<PrometheusState>>) -> impl Into
 /// This function runs until the server is shut down or the process exits.
 #[instrument(skip(store))]
 pub async fn serve(
-    config: &PrometheusExporter,
+    config: &PrometheusExporterConfig,
     store: MetricStore,
     cancel: CancellationToken,
     internal_metrics: Option<Arc<InternalMetrics>>,

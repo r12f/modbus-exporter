@@ -1,6 +1,7 @@
 use super::*;
 use crate::config::{
-    ByteOrder, Collector, DataType, Metric, MetricType as ConfigMetricType, Protocol, RegisterType,
+    ByteOrder, CollectorConfig, DataType, MetricConfig, MetricType as ConfigMetricType, Protocol,
+    RegisterType,
 };
 use crate::reader::modbus::{BusConnection, ModbusReader};
 use anyhow::Result;
@@ -103,8 +104,8 @@ impl ModbusReader for MockModbusClient {
     }
 }
 
-fn test_collector_config(name: &str) -> Collector {
-    Collector {
+fn test_collector_config(name: &str) -> CollectorConfig {
+    CollectorConfig {
         name: name.to_string(),
         protocol: Protocol::ModbusTcp {
             endpoint: "127.0.0.1:502".to_string(),
@@ -114,7 +115,7 @@ fn test_collector_config(name: &str) -> Collector {
         labels: HashMap::new(),
         metrics_files: None,
         batch_read: false,
-        metrics: vec![Metric {
+        metrics: vec![MetricConfig {
             name: "temperature".to_string(),
             description: "Temperature sensor".to_string(),
             metric_type: ConfigMetricType::Gauge,
@@ -137,7 +138,7 @@ struct MockFactory {
 }
 
 impl BusClientFactory for MockFactory {
-    fn create(&self, _collector: &Collector) -> anyhow::Result<BusClient> {
+    fn create(&self, _collector: &CollectorConfig) -> anyhow::Result<BusClient> {
         let client = self
             .clients
             .lock()

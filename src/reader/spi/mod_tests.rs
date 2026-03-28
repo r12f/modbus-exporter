@@ -1,5 +1,5 @@
 use super::*;
-use crate::config::{ByteOrder, DataType, Metric, MetricType};
+use crate::config::{ByteOrder, DataType, MetricConfig, MetricType};
 
 /// Mock SPI device for testing.
 struct MockSpiDevice {
@@ -33,8 +33,8 @@ fn make_spi_metric(
     response_length: Option<u16>,
     response_offset: u16,
     data_type: DataType,
-) -> Metric {
-    Metric {
+) -> MetricConfig {
+    MetricConfig {
         name: name.to_string(),
         description: String::new(),
         metric_type: MetricType::Gauge,

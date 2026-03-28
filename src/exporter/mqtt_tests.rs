@@ -36,7 +36,7 @@ fn test_config_defaults() {
     let yaml = r#"
 endpoint: "mqtt://localhost:1883"
 "#;
-    let cfg: crate::config::MqttExporter = serde_yaml::from_str(yaml).unwrap();
+    let cfg: crate::config::MqttExporterConfig = serde_yaml::from_str(yaml).unwrap();
     assert!(!cfg.enabled);
     assert_eq!(cfg.topic_prefix, "modbus/metrics");
     assert_eq!(cfg.qos, 1);

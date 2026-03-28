@@ -23,7 +23,7 @@ const MAX_COALESCE_GAP: u16 = 10;
 #[derive(Debug, Clone)]
 struct IndexedMetric<'a> {
     idx: usize,
-    metric: &'a config::Metric,
+    metric: &'a config::MetricConfig,
     addr: u16,
     count: u16,
 }
@@ -73,7 +73,7 @@ fn coalesce<'a>(items: Vec<IndexedMetric<'a>>) -> Vec<MergedRange<'a>> {
 }
 
 /// Extract a single metric's value from a register buffer read starting at `range_start`.
-fn decode_metric(metric: &config::Metric, regs: &[u16], range_start: u16) -> Result<f64> {
+fn decode_metric(metric: &config::MetricConfig, regs: &[u16], range_start: u16) -> Result<f64> {
     let addr = metric
         .address
         .ok_or_else(|| anyhow::anyhow!("metric '{}' has no address", metric.name))?;
@@ -108,7 +108,7 @@ fn decode_metric(metric: &config::Metric, regs: &[u16], range_start: u16) -> Res
 }
 
 /// Read a single metric individually (fallback path).
-async fn read_single(reader: &mut dyn ModbusReader, metric: &config::Metric) -> Result<f64> {
+async fn read_single(reader: &mut dyn ModbusReader, metric: &config::MetricConfig) -> Result<f64> {
     let addr = metric
         .address
         .ok_or_else(|| anyhow::anyhow!("metric '{}' has no address", metric.name))?;
@@ -154,14 +154,14 @@ async fn read_single(reader: &mut dyn ModbusReader, metric: &config::Metric) -> 
 /// On any batch failure, falls back to individual reads for that range.
 /// Result of a batch read, including the number of Modbus read calls issued.
 pub struct BatchReadResult<'a> {
-    pub results: Vec<(&'a config::Metric, Result<f64>)>,
+    pub results: Vec<(&'a config::MetricConfig, Result<f64>)>,
     /// Number of Modbus read calls actually issued (coalesced ranges + individual fallbacks).
     pub read_count: usize,
 }
 
 pub async fn batch_read_coalesced<'a>(
     reader: &mut dyn ModbusReader,
-    metrics: &'a [config::Metric],
+    metrics: &'a [config::MetricConfig],
 ) -> BatchReadResult<'a> {
     let mut results: Vec<Option<Result<f64>>> = (0..metrics.len()).map(|_| None).collect();
     let mut read_count: usize = 0;
@@ -169,7 +169,7 @@ pub async fn batch_read_coalesced<'a>(
     // Separate register-based metrics (holding/input) from bit-based (coil/discrete).
     let mut holding: Vec<IndexedMetric<'_>> = Vec::new();
     let mut input: Vec<IndexedMetric<'_>> = Vec::new();
-    let mut individual: Vec<(usize, &config::Metric)> = Vec::new();
+    let mut individual: Vec<(usize, &config::MetricConfig)> = Vec::new();
 
     for (idx, m) in metrics.iter().enumerate() {
         let Some(addr) = m.address else {

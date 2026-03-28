@@ -2,7 +2,7 @@
 //!
 //! Reads from [`MetricStore`] cache only — never triggers Modbus calls.
 
-use crate::config::OtlpExporter;
+use crate::config::OtlpExporterConfig;
 use crate::metrics::{MetricStore, MetricType, MetricValue};
 use anyhow::Result;
 use std::collections::HashMap;
@@ -402,7 +402,7 @@ async fn send_with_retry(
 /// Performs one final flush on shutdown.
 #[instrument(skip_all, fields(endpoint))]
 pub async fn run(
-    config: OtlpExporter,
+    config: OtlpExporterConfig,
     store: MetricStore,
     global_labels: HashMap<String, String>,
     cancel: tokio_util::sync::CancellationToken,
@@ -469,7 +469,7 @@ pub async fn run(
 async fn export_once(
     client: &reqwest::Client,
     url: &str,
-    config: &OtlpExporter,
+    config: &OtlpExporterConfig,
     store: &MetricStore,
     global_labels: &HashMap<String, String>,
     process_start: SystemTime,
