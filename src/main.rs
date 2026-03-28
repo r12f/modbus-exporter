@@ -104,7 +104,7 @@ impl BusClientFactory for RealBusClientFactory {
                 let spi_device: Box<dyn reader::spi::SpiDevice> =
                     Box::new(reader::spi::StubSpiDevice);
 
-                let client = reader::spi::SpiClient::new(spi_device, device.clone());
+                let client = reader::spi::SpiMetricReader::new(spi_device, device.clone());
                 let device_lock = reader::spi::get_device_lock(device);
                 Ok(BusClient::Spi {
                     client,
