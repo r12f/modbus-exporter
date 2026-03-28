@@ -2,10 +2,12 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 use crate::config;
 use crate::decoder;
+
+/// Type alias for the shared bus lock (std Mutex for use in spawn_blocking).
+pub type BusLock = Arc<std::sync::Mutex<()>>;
 
 /// Trait abstracting I2C device operations for testability.
 pub trait I2cDevice: Send {
@@ -88,28 +90,28 @@ impl I2cDevice for StubI2cDevice {
 
 /// I2C client that wraps a device and provides async read operations.
 pub struct I2cClient {
-    device: Box<dyn I2cDevice>,
+    device: Arc<std::sync::Mutex<Box<dyn I2cDevice>>>,
     bus_path: String,
     address: u8,
     connected: bool,
 }
 
 /// Per-bus mutex map for serializing access.
-static BUS_LOCKS: std::sync::LazyLock<Mutex<HashMap<String, Arc<Mutex<()>>>>> =
-    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+static BUS_LOCKS: std::sync::LazyLock<std::sync::Mutex<HashMap<String, BusLock>>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(HashMap::new()));
 
 /// Get or create a per-bus lock.
-pub async fn get_bus_lock(bus_path: &str) -> Arc<Mutex<()>> {
-    let mut map = BUS_LOCKS.lock().await;
+pub fn get_bus_lock(bus_path: &str) -> BusLock {
+    let mut map = BUS_LOCKS.lock().unwrap();
     map.entry(bus_path.to_string())
-        .or_insert_with(|| Arc::new(Mutex::new(())))
+        .or_insert_with(|| Arc::new(std::sync::Mutex::new(())))
         .clone()
 }
 
 impl I2cClient {
     pub fn new(device: Box<dyn I2cDevice>, bus_path: String, address: u8) -> Self {
         Self {
-            device,
+            device: Arc::new(std::sync::Mutex::new(device)),
             bus_path,
             address,
             connected: false,
@@ -117,36 +119,63 @@ impl I2cClient {
     }
 
     /// Read bytes from a register address on the I2C device.
-    pub fn read_register_sync(&mut self, register: u8, byte_count: usize) -> Result<Vec<u8>> {
-        self.device.write_read(&[register], byte_count)
+    pub fn read_register_sync(&self, register: u8, byte_count: usize) -> Result<Vec<u8>> {
+        let mut dev = self.device.lock().map_err(|e| anyhow::anyhow!("device lock poisoned: {e}"))?;
+        dev.write_read(&[register], byte_count)
     }
 }
 
 /// Read a single I2C metric.
 pub async fn read_i2c_metric(
-    client: &mut I2cClient,
+    client: &I2cClient,
     metric: &config::Metric,
-    bus_lock: &Arc<Mutex<()>>,
+    bus_lock: &BusLock,
 ) -> Result<f64> {
     let data_type = map_data_type(metric.data_type);
     let byte_order = map_byte_order(metric.byte_order);
+
+    // Validate that metric address fits in u8 (I2C register addresses are 8-bit)
+    if metric.address > 0xFF {
+        anyhow::bail!(
+            "I2C register address {:#06x} exceeds u8 range (max 0xFF)",
+            metric.address
+        );
+    }
     let register = metric.address as u8;
+
+    // Reject mid-endian byte orders for I2C (Modbus-specific concept)
+    if matches!(
+        metric.byte_order,
+        config::ByteOrder::MidBigEndian | config::ByteOrder::MidLittleEndian
+    ) {
+        anyhow::bail!(
+            "mid-endian byte order is not supported for I2C protocol (Modbus-specific)"
+        );
+    }
+
     let num_bytes = decoder::byte_count(data_type);
     let scale = metric.scale;
     let offset = metric.offset;
 
-    // We need to move data out of the client for spawn_blocking
-    // Instead, we hold the bus lock and do the blocking read
-    let _lock = bus_lock.lock().await;
+    // Clone Arcs for move into spawn_blocking
+    let device = Arc::clone(&client.device);
+    let bus_lock = Arc::clone(bus_lock);
+    let bus_path = client.bus_path.clone();
+    let address = client.address;
 
-    let bytes = client
-        .read_register_sync(register, num_bytes)
-        .with_context(|| {
-            format!(
-                "reading I2C register {:#04x} ({} bytes) from device {:#04x} on {}",
-                register, num_bytes, client.address, client.bus_path
-            )
-        })?;
+    let bytes = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
+        let _lock = bus_lock.lock().map_err(|e| anyhow::anyhow!("bus lock poisoned: {e}"))?;
+        let mut dev = device.lock().map_err(|e| anyhow::anyhow!("device lock poisoned: {e}"))?;
+        dev.write_read(&[register], num_bytes)
+            .with_context(|| {
+                format!(
+                    "reading I2C register {:#04x} ({} bytes) from device {:#04x} on {}",
+                    register, num_bytes, address, bus_path
+                )
+            })
+    })
+    .await
+    .context("spawn_blocking join error")??;
 
     decoder::decode_bytes(&bytes, data_type, byte_order, scale, offset)
         .map_err(|e| anyhow::anyhow!("{e}"))

@@ -58,7 +58,7 @@ pub enum BusClient {
     Modbus(Box<dyn ModbusClient>),
     I2c {
         client: I2cClient,
-        bus_lock: Arc<tokio::sync::Mutex<()>>,
+        bus_lock: i2c::BusLock,
     },
 }
 

@@ -62,11 +62,19 @@ impl BusClientFactory for RealBusClientFactory {
                 BusClient::Modbus(Box::new(RtuClient::new(builder, slave_id)))
             }
             Protocol::I2c { bus, address } => {
-                // Use a stub device — real Linux I2C device is created at connect time
-                let device = i2c::StubI2cDevice;
-                let client = i2c::I2cClient::new(Box::new(device), bus.clone(), *address);
-                // Bus lock is created lazily via get_bus_lock
-                let bus_lock = std::sync::Arc::new(tokio::sync::Mutex::new(()));
+                // Use real LinuxI2cDevice on Linux, StubI2cDevice otherwise
+                #[cfg(target_os = "linux")]
+                let device: Box<dyn i2c::I2cDevice> = {
+                    let mut dev = i2c::linux_device::LinuxI2cDevice::new(bus.clone(), *address);
+                    dev.open().expect("failed to open I2C device");
+                    Box::new(dev)
+                };
+                #[cfg(not(target_os = "linux"))]
+                let device: Box<dyn i2c::I2cDevice> = Box::new(i2c::StubI2cDevice);
+
+                let client = i2c::I2cClient::new(device, bus.clone(), *address);
+                // Use shared per-bus lock via get_bus_lock
+                let bus_lock = i2c::get_bus_lock(bus);
                 BusClient::I2c { client, bus_lock }
             }
         }

@@ -49,17 +49,20 @@ fn make_metric(name: &str, address: u16, data_type: DataType) -> Metric {
     }
 }
 
+fn make_bus_lock() -> BusLock {
+    Arc::new(std::sync::Mutex::new(()))
+}
+
 #[tokio::test]
 async fn test_read_u8() {
     let mut responses = HashMap::new();
     responses.insert(0xFA, vec![0x2A]);
     let device = MockI2cDevice::new(responses);
-    let mut client = I2cClient::new(Box::new(device), "/dev/i2c-1".into(), 0x76);
-    client.connected = true;
+    let client = I2cClient::new(Box::new(device), "/dev/i2c-1".into(), 0x76);
 
     let metric = make_metric("temp", 0xFA, DataType::U8);
-    let bus_lock = Arc::new(Mutex::new(()));
-    let val = read_i2c_metric(&mut client, &metric, &bus_lock)
+    let bus_lock = make_bus_lock();
+    let val = read_i2c_metric(&client, &metric, &bus_lock)
         .await
         .unwrap();
     assert!((val - 42.0).abs() < f64::EPSILON);
@@ -70,12 +73,11 @@ async fn test_read_u16_big_endian() {
     let mut responses = HashMap::new();
     responses.insert(0xFA, vec![0x01, 0x00]); // 256 in big endian
     let device = MockI2cDevice::new(responses);
-    let mut client = I2cClient::new(Box::new(device), "/dev/i2c-1".into(), 0x76);
-    client.connected = true;
+    let client = I2cClient::new(Box::new(device), "/dev/i2c-1".into(), 0x76);
 
     let metric = make_metric("temp", 0xFA, DataType::U16);
-    let bus_lock = Arc::new(Mutex::new(()));
-    let val = read_i2c_metric(&mut client, &metric, &bus_lock)
+    let bus_lock = make_bus_lock();
+    let val = read_i2c_metric(&client, &metric, &bus_lock)
         .await
         .unwrap();
     assert!((val - 256.0).abs() < f64::EPSILON);
@@ -86,12 +88,11 @@ async fn test_read_bool() {
     let mut responses = HashMap::new();
     responses.insert(0x10, vec![0x03]); // bit 0 set
     let device = MockI2cDevice::new(responses);
-    let mut client = I2cClient::new(Box::new(device), "/dev/i2c-1".into(), 0x48);
-    client.connected = true;
+    let client = I2cClient::new(Box::new(device), "/dev/i2c-1".into(), 0x48);
 
     let metric = make_metric("flag", 0x10, DataType::Bool);
-    let bus_lock = Arc::new(Mutex::new(()));
-    let val = read_i2c_metric(&mut client, &metric, &bus_lock)
+    let bus_lock = make_bus_lock();
+    let val = read_i2c_metric(&client, &metric, &bus_lock)
         .await
         .unwrap();
     assert!((val - 1.0).abs() < f64::EPSILON);
@@ -102,15 +103,14 @@ async fn test_read_with_scale_offset() {
     let mut responses = HashMap::new();
     responses.insert(0xFA, vec![0x00, 0x64]); // 100 in big endian u16
     let device = MockI2cDevice::new(responses);
-    let mut client = I2cClient::new(Box::new(device), "/dev/i2c-1".into(), 0x76);
-    client.connected = true;
+    let client = I2cClient::new(Box::new(device), "/dev/i2c-1".into(), 0x76);
 
     let mut metric = make_metric("temp", 0xFA, DataType::U16);
     metric.scale = 0.01;
     metric.offset = -40.0;
 
-    let bus_lock = Arc::new(Mutex::new(()));
-    let val = read_i2c_metric(&mut client, &metric, &bus_lock)
+    let bus_lock = make_bus_lock();
+    let val = read_i2c_metric(&client, &metric, &bus_lock)
         .await
         .unwrap();
     // 100 * 0.01 + (-40.0) = -39.0
@@ -121,23 +121,22 @@ async fn test_read_with_scale_offset() {
 async fn test_read_register_not_found() {
     let responses = HashMap::new(); // empty
     let device = MockI2cDevice::new(responses);
-    let mut client = I2cClient::new(Box::new(device), "/dev/i2c-1".into(), 0x76);
-    client.connected = true;
+    let client = I2cClient::new(Box::new(device), "/dev/i2c-1".into(), 0x76);
 
     let metric = make_metric("temp", 0xFA, DataType::U8);
-    let bus_lock = Arc::new(Mutex::new(()));
-    let result = read_i2c_metric(&mut client, &metric, &bus_lock).await;
+    let bus_lock = make_bus_lock();
+    let result = read_i2c_metric(&client, &metric, &bus_lock).await;
     assert!(result.is_err());
 }
 
-#[tokio::test]
-async fn test_bus_lock_serialization() {
-    let lock1 = get_bus_lock("/dev/i2c-1").await;
-    let lock2 = get_bus_lock("/dev/i2c-1").await;
+#[test]
+fn test_bus_lock_serialization() {
+    let lock1 = get_bus_lock("/dev/i2c-1");
+    let lock2 = get_bus_lock("/dev/i2c-1");
     // Same bus -> same lock (Arc pointing to same allocation)
     assert!(Arc::ptr_eq(&lock1, &lock2));
 
-    let lock3 = get_bus_lock("/dev/i2c-2").await;
+    let lock3 = get_bus_lock("/dev/i2c-2");
     // Different bus -> different lock
     assert!(!Arc::ptr_eq(&lock1, &lock3));
 }
@@ -149,13 +148,50 @@ async fn test_read_f32() {
     let mut responses = HashMap::new();
     responses.insert(0x20, bytes.to_vec());
     let device = MockI2cDevice::new(responses);
-    let mut client = I2cClient::new(Box::new(device), "/dev/i2c-1".into(), 0x50);
-    client.connected = true;
+    let client = I2cClient::new(Box::new(device), "/dev/i2c-1".into(), 0x50);
 
     let metric = make_metric("pressure", 0x20, DataType::F32);
-    let bus_lock = Arc::new(Mutex::new(()));
-    let result = read_i2c_metric(&mut client, &metric, &bus_lock)
+    let bus_lock = make_bus_lock();
+    let result = read_i2c_metric(&client, &metric, &bus_lock)
         .await
         .unwrap();
     assert!((result - 3.14_f64).abs() < 0.001);
+}
+
+#[tokio::test]
+async fn test_mid_endian_rejected_for_i2c() {
+    let mut responses = HashMap::new();
+    responses.insert(0x10, vec![0x00, 0x01, 0x00, 0x02]);
+    let device = MockI2cDevice::new(responses);
+    let client = I2cClient::new(Box::new(device), "/dev/i2c-1".into(), 0x50);
+
+    let mut metric = make_metric("val", 0x10, DataType::U32);
+    metric.byte_order = ByteOrder::MidBigEndian;
+
+    let bus_lock = make_bus_lock();
+    let result = read_i2c_metric(&client, &metric, &bus_lock).await;
+    assert!(result.is_err());
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("mid-endian byte order is not supported for I2C")
+    );
+}
+
+#[tokio::test]
+async fn test_address_overflow_rejected() {
+    let device = MockI2cDevice::new(HashMap::new());
+    let client = I2cClient::new(Box::new(device), "/dev/i2c-1".into(), 0x50);
+
+    let metric = make_metric("val", 0x1FF, DataType::U8); // > 0xFF
+    let bus_lock = make_bus_lock();
+    let result = read_i2c_metric(&client, &metric, &bus_lock).await;
+    assert!(result.is_err());
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("exceeds u8 range")
+    );
 }

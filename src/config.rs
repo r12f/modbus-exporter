@@ -761,6 +761,34 @@ impl Config {
                             m.name
                         );
                     }
+                    // u8 data type is not valid for Modbus (registers are 16-bit)
+                    if m.data_type == DataType::U8 {
+                        bail!(
+                            "collector '{}', metric '{}': data_type u8 is not supported for Modbus protocols (minimum register size is 16-bit)",
+                            c.name,
+                            m.name
+                        );
+                    }
+                }
+                // I2C-specific validations
+                if is_i2c {
+                    // Validate metric address fits in u8 (I2C register addresses are 8-bit)
+                    if m.address > 0xFF {
+                        bail!(
+                            "collector '{}', metric '{}': I2C register address {:#06x} exceeds u8 range (max 0xFF)",
+                            c.name,
+                            m.name,
+                            m.address
+                        );
+                    }
+                    // Mid-endian byte orders are Modbus-specific (word-swapped)
+                    if matches!(m.byte_order, ByteOrder::MidBigEndian | ByteOrder::MidLittleEndian) {
+                        bail!(
+                            "collector '{}', metric '{}': mid-endian byte order is not supported for I2C (Modbus-specific)",
+                            c.name,
+                            m.name
+                        );
+                    }
                 }
                 if m.metric_type == MetricType::Counter && m.data_type == DataType::Bool {
                     bail!(
