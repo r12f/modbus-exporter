@@ -15,7 +15,7 @@ pub struct ModbusTcpMetricReader {
 }
 
 impl ModbusTcpMetricReader {
-    /// Create a new TCP client (does not connect yet).
+    /// Create a new Modbus TCP metric reader (does not connect yet).
     pub fn new(endpoint: String, slave_id: u8) -> Self {
         Self {
             endpoint,
