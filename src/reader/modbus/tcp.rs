@@ -7,14 +7,14 @@ use super::{
     validate_coil_count, validate_register_count, BusConnection, ModbusReader, READ_TIMEOUT,
 };
 
-/// Modbus TCP client.
-pub struct TcpClient {
+/// Modbus TCP metric reader.
+pub struct ModbusTcpMetricReader {
     endpoint: String,
     slave_id: u8,
     context: Option<ModbusContext>,
 }
 
-impl TcpClient {
+impl ModbusTcpMetricReader {
     /// Create a new TCP client (does not connect yet).
     pub fn new(endpoint: String, slave_id: u8) -> Self {
         Self {
@@ -36,7 +36,7 @@ impl TcpClient {
 }
 
 #[async_trait]
-impl BusConnection for TcpClient {
+impl BusConnection for ModbusTcpMetricReader {
     async fn connect(&mut self) -> Result<()> {
         if self.context.is_some() {
             self.disconnect().await.ok();
@@ -69,7 +69,7 @@ impl BusConnection for TcpClient {
 }
 
 #[async_trait]
-impl ModbusReader for TcpClient {
+impl ModbusReader for ModbusTcpMetricReader {
     async fn read_holding_registers(&mut self, addr: u16, count: u16) -> Result<Vec<u16>> {
         validate_register_count(count)?;
         let ctx = self.ctx()?;
