@@ -5,11 +5,11 @@ pub mod spi;
 
 use std::collections::HashMap;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use tokio_util::sync::CancellationToken;
 
-use crate::config::MetricConfig;
+use crate::config::{self, MetricConfig, Protocol};
 
 /// Check for duplicate metric names and warn about them.
 pub fn warn_duplicate_metric_names(metrics: &[MetricConfig]) {
@@ -63,4 +63,128 @@ pub trait MetricReader: Send {
     /// The `cancel` token allows cooperative cancellation between individual
     /// metric reads for fast shutdown on slow buses.
     async fn read(&mut self, cancel: &CancellationToken) -> ReadResults;
+}
+
+/// Factory trait for creating metric readers from config.
+/// This allows tests to inject mock readers.
+pub trait MetricReaderFactory: Send + Sync {
+    fn create(&self, collector: &config::CollectorConfig) -> Result<Box<dyn MetricReader>>;
+}
+
+/// Default factory implementation that creates real readers based on protocol config.
+pub struct MetricReaderFactoryImpl;
+
+impl MetricReaderFactory for MetricReaderFactoryImpl {
+    fn create(&self, collector: &config::CollectorConfig) -> Result<Box<dyn MetricReader>> {
+        match &collector.protocol {
+            Protocol::ModbusTcp { endpoint } => {
+                let slave_id = collector.slave_id.unwrap_or(1);
+                Ok(Box::new(modbus::tcp::ModbusTcpMetricReader::new(
+                    endpoint.clone(),
+                    slave_id,
+                )))
+            }
+            Protocol::ModbusRtu {
+                device,
+                bps,
+                data_bits,
+                stop_bits,
+                parity,
+            } => {
+                let slave_id = collector.slave_id.unwrap_or(1);
+                let builder = tokio_serial::new(device, *bps)
+                    .data_bits(match data_bits {
+                        5 => tokio_serial::DataBits::Five,
+                        6 => tokio_serial::DataBits::Six,
+                        7 => tokio_serial::DataBits::Seven,
+                        _ => tokio_serial::DataBits::Eight,
+                    })
+                    .stop_bits(match stop_bits {
+                        2 => tokio_serial::StopBits::Two,
+                        _ => tokio_serial::StopBits::One,
+                    })
+                    .parity(match parity {
+                        config::Parity::None => tokio_serial::Parity::None,
+                        config::Parity::Even => tokio_serial::Parity::Even,
+                        config::Parity::Odd => tokio_serial::Parity::Odd,
+                    });
+                Ok(Box::new(modbus::rtu::ModbusRtuMetricReader::new(
+                    builder, slave_id,
+                )))
+            }
+            Protocol::I2c { bus, address } => {
+                #[cfg(target_os = "linux")]
+                let device: Box<dyn i2c::I2cDevice> = {
+                    let mut dev = i2c::linux_device::LinuxI2cDevice::new(bus.clone(), *address);
+                    dev.open().context("failed to open I2C device")?;
+                    Box::new(dev)
+                };
+                #[cfg(not(target_os = "linux"))]
+                let device: Box<dyn i2c::I2cDevice> = Box::new(i2c::StubI2cDevice);
+
+                let bus_lock = i2c::get_bus_lock(bus);
+                let client = i2c::I2cMetricReader::new(device, bus.clone(), *address, bus_lock);
+                Ok(Box::new(client))
+            }
+            Protocol::Spi {
+                device,
+                speed_hz,
+                mode,
+                bits_per_word,
+            } => {
+                #[cfg(target_os = "linux")]
+                let spi_device: Box<dyn spi::SpiDevice> = {
+                    let mut dev = spi::linux_device::LinuxSpiDevice::new(
+                        device.clone(),
+                        *speed_hz,
+                        *mode,
+                        *bits_per_word,
+                    );
+                    dev.open().context("failed to open SPI device")?;
+                    Box::new(dev)
+                };
+                #[cfg(not(target_os = "linux"))]
+                let spi_device: Box<dyn spi::SpiDevice> = Box::new(spi::StubSpiDevice);
+
+                let device_lock = spi::get_device_lock(device);
+                let client = spi::SpiMetricReader::new(spi_device, device.clone(), device_lock);
+                Ok(Box::new(client))
+            }
+            Protocol::I3c {
+                bus,
+                pid,
+                address,
+                device_class,
+                instance,
+            } => {
+                let address_mode = if let Some(pid_str) = pid {
+                    i3c::AddressMode::Pid(pid_str.clone())
+                } else if let Some(addr) = address {
+                    i3c::AddressMode::Static(*addr)
+                } else {
+                    i3c::AddressMode::DeviceClass {
+                        class: device_class.clone().unwrap(),
+                        instance: instance.unwrap(),
+                    }
+                };
+
+                #[cfg(target_os = "linux")]
+                let device: Box<dyn i3c::I3cDevice> = {
+                    let mut dev = i3c::linux_device::LinuxI3cDevice::new(bus.clone());
+                    dev.open().context("failed to open I3C device")?;
+                    Box::new(dev)
+                };
+                #[cfg(not(target_os = "linux"))]
+                let device: Box<dyn i3c::I3cDevice> = Box::new(i3c::StubI3cDevice);
+
+                let client = i3c::I3cMetricReader::new(device, bus.clone(), address_mode);
+                let bus_lock = i3c::get_bus_lock(bus);
+                let handle = i3c::I3cMetricReaderHandle::new(
+                    std::sync::Arc::new(tokio::sync::Mutex::new(client)),
+                    bus_lock,
+                );
+                Ok(Box::new(handle))
+            }
+        }
+    }
 }
