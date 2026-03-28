@@ -85,8 +85,10 @@ The exporter interacts with I3C through two interfaces:
    matching. Each device directory exposes attributes including `pid`, `dcr`
    (Device Characteristic Register), and `bcr` (Bus Characteristic Register).
 
-2. **`/dev/i3c-N`** — character device for data transfers. Register reads follow
-   the same write-address-then-read pattern as I2C.
+2. **`/dev/i3c-N`** — controller character device for data transfers (where `N` is
+   the controller index, not a per-device file). Individual device access is
+   routed through the controller using the resolved dynamic address. Register
+   reads follow the same write-address-then-read pattern as I2C.
 
 ### Address Resolution Phase
 
@@ -106,7 +108,9 @@ all dynamic address assignments. The exporter handles this:
 2. Re-enumerate devices via `/sys/bus/i3c/devices/` before retrying.
 3. Re-resolve the configured address mode to obtain the new dynamic address.
 4. Retry the read with the updated address.
-5. If re-resolution fails, report `read_error` to the collector.
+5. If re-resolution fails after **3 attempts** (with exponential backoff: 100ms,
+   500ms, 2s), report `read_error` to the collector and skip that polling cycle.
+6. The next polling cycle will attempt re-resolution again from scratch.
 
 ## Configuration
 

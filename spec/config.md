@@ -95,7 +95,7 @@ See [export-mqtt.md](export-mqtt.md) for full MQTT export specification.
 |-------|------|----------|---------|-------------|
 | `name` | `string` | Yes | — | Unique collector name (used as label) |
 | `protocol` | `Protocol` | Yes | — | Connection protocol |
-| `slave_id` | `u8` | Modbus only | — | Modbus slave/unit ID (1-247). Not used for I2C/SPI. |
+| `slave_id` | `u8` | Modbus only | — | Modbus slave/unit ID (1-247). Not used for I2C/SPI/I3C. |
 | `polling_interval` | `string` | No | `"10s"` | Poll interval (duration string) |
 | `labels` | `map<string, string>` | No | `{}` | Labels for all metrics in this collector |
 | `metrics_files` | `list<string>` | No | `[]` | Paths to metrics definition files (see [Metrics Files](#metrics-files)) |
@@ -212,7 +212,7 @@ Note: `register_type` and `address` are not used for SPI. `u8` data type is avai
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `address` | `u16` | Yes | — | I3C register address (0x00–0xFF) |
+| `address` | `u8` | Yes | — | I3C register address (0x00–0xFF) |
 
 Note: `register_type` is not used for I3C. `u8` data type is available. `byte_order` supports only `big_endian`/`little_endian` (`mid_*` variants are Modbus-specific).
 
