@@ -138,7 +138,7 @@ impl SpiClient {
 /// Read a single SPI metric.
 pub async fn read_spi_metric(
     client: &SpiClient,
-    metric: &config::Metric,
+    metric: &config::MetricConfig,
     device_lock: &DeviceLock,
 ) -> Result<f64> {
     let data_type = bus::map_data_type(metric.data_type);

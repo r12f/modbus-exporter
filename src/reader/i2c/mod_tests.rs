@@ -1,5 +1,5 @@
 use super::*;
-use crate::config::{ByteOrder, DataType, Metric, MetricType};
+use crate::config::{ByteOrder, DataType, MetricConfig, MetricType};
 
 /// Mock I2C device for testing.
 struct MockI2cDevice {
@@ -34,8 +34,8 @@ impl I2cDevice for MockI2cDevice {
     }
 }
 
-fn make_metric(name: &str, address: u16, data_type: DataType) -> Metric {
-    Metric {
+fn make_metric(name: &str, address: u16, data_type: DataType) -> MetricConfig {
+    MetricConfig {
         name: name.to_string(),
         description: String::new(),
         metric_type: MetricType::Gauge,

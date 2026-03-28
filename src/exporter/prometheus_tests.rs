@@ -107,7 +107,7 @@ fn test_label_escaping() {
 
 #[tokio::test]
 async fn test_serve_disabled() {
-    let config = crate::config::PrometheusExporter {
+    let config = crate::config::PrometheusExporterConfig {
         enabled: false,
         listen: "127.0.0.1:0".to_string(),
         path: "/metrics".to_string(),
@@ -131,7 +131,7 @@ async fn test_http_endpoint() {
     );
     store.publish("sensor", vec![m], &BTreeMap::new(), &BTreeMap::new());
 
-    let config = crate::config::PrometheusExporter {
+    let config = crate::config::PrometheusExporterConfig {
         enabled: true,
         listen: "127.0.0.1:0".to_string(),
         path: "/metrics".to_string(),

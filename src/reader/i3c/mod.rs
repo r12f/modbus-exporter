@@ -387,7 +387,7 @@ impl I3cClient {
 /// Read a single I3C metric.
 pub async fn read_i3c_metric(
     client: &Arc<tokio::sync::Mutex<I3cClient>>,
-    metric: &config::Metric,
+    metric: &config::MetricConfig,
     bus_lock: &BusLock,
 ) -> Result<f64> {
     let data_type = map_data_type(metric.data_type);

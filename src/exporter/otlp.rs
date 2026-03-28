@@ -2,7 +2,7 @@
 //!
 //! Reads from [`MetricStore`] cache only — never triggers Modbus calls.
 
-use crate::config::OtlpExporter;
+use crate::config::OtlpExporterConfig;
 use crate::metrics::{MetricStore, MetricType, MetricValue};
 use anyhow::Result;
 use std::collections::HashMap;
@@ -87,7 +87,7 @@ pub fn build_request(
     let mut scope = Vec::new();
     encode_ld(1, b"bus-exporter", &mut scope); // name
 
-    // Build Metric entries
+    // Build MetricConfig entries
     let mut otlp_metrics_buf = Vec::new();
     for m in metrics {
         let mut metric = Vec::new();
@@ -117,13 +117,13 @@ pub fn build_request(
 
         match m.metric_type {
             MetricType::Gauge => {
-                // Gauge message (field 5 of Metric)
+                // Gauge message (field 5 of MetricConfig)
                 let mut gauge = Vec::new();
                 encode_ld(1, &dp, &mut gauge); // data_points
                 encode_ld(5, &gauge, &mut metric);
             }
             MetricType::Counter => {
-                // Sum message (field 7 of Metric)
+                // Sum message (field 7 of MetricConfig)
                 let mut sum = Vec::new();
                 encode_ld(1, &dp, &mut sum); // data_points
                 encode_varint_field(2, 2, &mut sum); // AGGREGATION_TEMPORALITY_CUMULATIVE = 2
@@ -201,7 +201,7 @@ pub fn build_request_with_internal(
     request
 }
 
-/// Encode a single Metric message.
+/// Encode a single MetricConfig message.
 fn encode_single_metric(m: &MetricValue, process_start: SystemTime) -> Vec<u8> {
     let mut metric = Vec::new();
     encode_ld(1, m.name.as_bytes(), &mut metric);
@@ -402,7 +402,7 @@ async fn send_with_retry(
 /// Performs one final flush on shutdown.
 #[instrument(skip_all, fields(endpoint))]
 pub async fn run(
-    config: OtlpExporter,
+    config: OtlpExporterConfig,
     store: MetricStore,
     global_labels: HashMap<String, String>,
     cancel: tokio_util::sync::CancellationToken,
@@ -469,7 +469,7 @@ pub async fn run(
 async fn export_once(
     client: &reqwest::Client,
     url: &str,
-    config: &OtlpExporter,
+    config: &OtlpExporterConfig,
     store: &MetricStore,
     global_labels: &HashMap<String, String>,
     process_start: SystemTime,

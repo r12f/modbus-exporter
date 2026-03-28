@@ -1,7 +1,7 @@
 //! Unit and integration tests for batch read coalescing.
 
 use super::*;
-use crate::config::{ByteOrder, DataType, Metric, MetricType, RegisterType};
+use crate::config::{ByteOrder, DataType, MetricConfig, MetricType, RegisterType};
 use crate::reader::modbus::{BusConnection, ModbusReader};
 use anyhow::{bail, Result};
 use async_trait::async_trait;
@@ -87,8 +87,8 @@ impl ModbusReader for MockBatchClient {
     }
 }
 
-fn make_metric(name: &str, addr: u16, data_type: DataType, reg_type: RegisterType) -> Metric {
-    Metric {
+fn make_metric(name: &str, addr: u16, data_type: DataType, reg_type: RegisterType) -> MetricConfig {
+    MetricConfig {
         name: name.to_string(),
         description: String::new(),
         metric_type: MetricType::Gauge,
@@ -399,8 +399,8 @@ async fn test_batch_read_fallback_on_failure() {
 fn test_coalesce_splits_at_125_register_limit() {
     // Two metrics that together span more than 125 registers should be split
     // into separate ranges even though the gap is within threshold.
-    // Metric A: addr 0, count 1 (U16)
-    // Metric B: addr 124, count 2 (U32) => end = 126, merged_count = 126 > 125
+    // MetricConfig A: addr 0, count 1 (U16)
+    // MetricConfig B: addr 124, count 2 (U32) => end = 126, merged_count = 126 > 125
     let m1 = make_metric("a", 0, DataType::U16, RegisterType::Holding);
     let m2 = make_metric("b", 124, DataType::U32, RegisterType::Holding);
     let items = vec![

@@ -29,7 +29,7 @@ use reader::modbus::{rtu::RtuClient, tcp::TcpClient};
 struct RealBusClientFactory;
 
 impl BusClientFactory for RealBusClientFactory {
-    fn create(&self, collector: &config::Collector) -> Result<BusClient> {
+    fn create(&self, collector: &config::CollectorConfig) -> Result<BusClient> {
         match &collector.protocol {
             Protocol::ModbusTcp { endpoint } => {
                 let slave_id = collector.slave_id.unwrap_or(1);
@@ -151,7 +151,7 @@ impl BusClientFactory for RealBusClientFactory {
 
 // ── Config → logging mapping ──────────────────────────────────────────
 
-fn map_logging_config(cfg: &config::Logging) -> LoggingConfig {
+fn map_logging_config(cfg: &config::LoggingConfig) -> LoggingConfig {
     let level = match cfg.level {
         config::LogLevel::Trace => "trace",
         config::LogLevel::Debug => "debug",
