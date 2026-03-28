@@ -254,7 +254,8 @@ async fn test_batch_read_values_match_individual() {
     client.holding_read_count.store(0, Ordering::Relaxed);
 
     // Batch read
-    let batch_results = batch_read_coalesced(&mut client, &metrics).await;
+    let batch_result = batch_read_coalesced(&mut client, &metrics).await;
+    let batch_results = batch_result.results;
 
     for (i, (_, result)) in batch_results.iter().enumerate() {
         let batch_val = result.as_ref().unwrap();
@@ -279,7 +280,8 @@ async fn test_batch_read_coalesces_adjacent() {
         make_metric("c", 2, DataType::U16, RegisterType::Holding),
     ];
 
-    let results = batch_read_coalesced(&mut client, &metrics).await;
+    let batch_result = batch_read_coalesced(&mut client, &metrics).await;
+    let results = batch_result.results;
 
     // Should have been only 1 holding read call
     assert_eq!(client.holding_read_count.load(Ordering::Relaxed), 1);
@@ -300,7 +302,8 @@ async fn test_batch_read_separate_register_types() {
         make_metric("i", 0, DataType::U16, RegisterType::Input),
     ];
 
-    let results = batch_read_coalesced(&mut client, &metrics).await;
+    let batch_result = batch_read_coalesced(&mut client, &metrics).await;
+    let results = batch_result.results;
 
     assert_eq!(client.holding_read_count.load(Ordering::Relaxed), 1);
     assert_eq!(client.input_read_count.load(Ordering::Relaxed), 1);
@@ -318,7 +321,8 @@ async fn test_batch_read_non_adjacent_separate_calls() {
         make_metric("b", 50, DataType::U16, RegisterType::Holding),
     ];
 
-    let results = batch_read_coalesced(&mut client, &metrics).await;
+    let batch_result = batch_read_coalesced(&mut client, &metrics).await;
+    let results = batch_result.results;
 
     assert_eq!(client.holding_read_count.load(Ordering::Relaxed), 2);
     assert_eq!(*results[0].1.as_ref().unwrap(), 10.0);
@@ -382,10 +386,67 @@ async fn test_batch_read_fallback_on_failure() {
         make_metric("b", 1, DataType::U16, RegisterType::Holding),
     ];
 
-    let results = batch_read_coalesced(&mut client, &metrics).await;
+    let batch_result = batch_read_coalesced(&mut client, &metrics).await;
+    let results = batch_result.results;
 
     // First call (batch) fails, then 2 individual calls succeed
     assert_eq!(client.holding_call_count.load(Ordering::Relaxed), 3);
     assert_eq!(*results[0].1.as_ref().unwrap(), 42.0);
     assert_eq!(*results[1].1.as_ref().unwrap(), 42.0);
+}
+
+#[test]
+fn test_coalesce_splits_at_125_register_limit() {
+    // Two metrics that together span more than 125 registers should be split
+    // into separate ranges even though the gap is within threshold.
+    // Metric A: addr 0, count 1 (U16)
+    // Metric B: addr 124, count 2 (U32) => end = 126, merged_count = 126 > 125
+    let m1 = make_metric("a", 0, DataType::U16, RegisterType::Holding);
+    let m2 = make_metric("b", 124, DataType::U32, RegisterType::Holding);
+    let items = vec![
+        IndexedMetric {
+            idx: 0,
+            metric: &m1,
+            addr: 0,
+            count: 1,
+        },
+        IndexedMetric {
+            idx: 1,
+            metric: &m2,
+            addr: 124,
+            count: 2,
+        },
+    ];
+    let ranges = coalesce(items);
+    assert_eq!(
+        ranges.len(),
+        2,
+        "metrics spanning >125 registers should produce 2 ranges"
+    );
+    assert_eq!(ranges[0].start, 0);
+    assert_eq!(ranges[0].end, 1);
+    assert_eq!(ranges[1].start, 124);
+    assert_eq!(ranges[1].end, 126);
+}
+
+#[tokio::test]
+async fn test_batch_read_125_limit_produces_multiple_reads() {
+    // Verify that metrics spanning >125 registers result in multiple Modbus reads.
+    let mut client = MockBatchClient::new().with_holding(&[(0, 10), (124, 20), (125, 30)]);
+
+    let metrics = vec![
+        make_metric("a", 0, DataType::U16, RegisterType::Holding),
+        make_metric("b", 124, DataType::U32, RegisterType::Holding),
+    ];
+
+    let result = batch_read_coalesced(&mut client, &metrics).await;
+
+    // Should be 2 separate read calls due to 125-register limit
+    assert_eq!(
+        client.holding_read_count.load(Ordering::Relaxed),
+        2,
+        "should issue 2 reads when range exceeds 125 registers"
+    );
+    assert_eq!(result.read_count, 2);
+    assert_eq!(*result.results[0].1.as_ref().unwrap(), 10.0);
 }

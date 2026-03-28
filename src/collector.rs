@@ -14,7 +14,7 @@ use crate::internal_metrics::InternalMetrics;
 use crate::metrics::{MetricStore, MetricType, MetricValue};
 use crate::reader::i2c::{self, I2cClient};
 use crate::reader::i3c;
-use crate::reader::modbus::batch::batch_read_coalesced;
+use crate::reader::modbus::batch::{batch_read_coalesced, BatchReadResult};
 use crate::reader::modbus::{BusConnection, ModbusClient};
 use crate::reader::spi::{self, SpiClient};
 
@@ -212,13 +212,22 @@ async fn run_collector(
         if use_batch {
             // Batch path: coalesce registers and read in bulk
             if let BusClient::Modbus(ref mut modbus_client) = client {
-                if let Some(ref im) = internal_metrics {
-                    let stats = im.get_or_create_collector(&collector.name);
-                    stats.modbus_requests.fetch_add(1, Relaxed);
+                // Check shutdown before batch read
+                if *shutdown_rx.borrow() {
+                    info!("shutdown requested, exiting");
+                    let _ = client.disconnect().await;
+                    return;
                 }
 
-                let batch_results =
-                    batch_read_coalesced(modbus_client.as_mut(), &collector.metrics).await;
+                let BatchReadResult {
+                    results: batch_results,
+                    read_count,
+                } = batch_read_coalesced(modbus_client.as_mut(), &collector.metrics).await;
+
+                if let Some(ref im) = internal_metrics {
+                    let stats = im.get_or_create_collector(&collector.name);
+                    stats.modbus_requests.fetch_add(read_count as u64, Relaxed);
+                }
 
                 for (metric_cfg, result) in batch_results {
                     match result {

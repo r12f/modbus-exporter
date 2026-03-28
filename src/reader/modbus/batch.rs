@@ -74,10 +74,33 @@ fn coalesce<'a>(items: Vec<IndexedMetric<'a>>) -> Vec<MergedRange<'a>> {
 
 /// Extract a single metric's value from a register buffer read starting at `range_start`.
 fn decode_metric(metric: &config::Metric, regs: &[u16], range_start: u16) -> Result<f64> {
-    let addr = metric.address.unwrap();
+    let addr = metric
+        .address
+        .ok_or_else(|| anyhow::anyhow!("metric '{}' has no address", metric.name))?;
     let count = metric.data_type.register_count();
-    let offset_in_buf = (addr - range_start) as usize;
-    let slice = &regs[offset_in_buf..offset_in_buf + count as usize];
+    let offset_in_buf = (addr as usize)
+        .checked_sub(range_start as usize)
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "metric '{}' address {} is before range start {}",
+                metric.name,
+                addr,
+                range_start
+            )
+        })?;
+    let end = offset_in_buf
+        .checked_add(count as usize)
+        .ok_or_else(|| anyhow::anyhow!("metric '{}' register range overflows", metric.name))?;
+    if end > regs.len() {
+        anyhow::bail!(
+            "metric '{}' register range [{}..{}) out of bounds (buffer len {})",
+            metric.name,
+            offset_in_buf,
+            end,
+            regs.len()
+        );
+    }
+    let slice = &regs[offset_in_buf..end];
     let data_type = bus::map_data_type(metric.data_type);
     let byte_order = bus::map_byte_order(metric.byte_order);
     decoder::decode(slice, data_type, byte_order, metric.scale, metric.offset)
@@ -127,11 +150,19 @@ async fn read_single(reader: &mut dyn ModbusReader, metric: &config::Metric) -> 
 /// Metrics are grouped by register type, coalesced, read in bulk, then
 /// split back. Coils/discrete inputs are read individually (not coalesced).
 /// On any batch failure, falls back to individual reads for that range.
+/// Result of a batch read, including the number of Modbus read calls issued.
+pub struct BatchReadResult<'a> {
+    pub results: Vec<(&'a config::Metric, Result<f64>)>,
+    /// Number of Modbus read calls actually issued (coalesced ranges + individual fallbacks).
+    pub read_count: usize,
+}
+
 pub async fn batch_read_coalesced<'a>(
     reader: &mut dyn ModbusReader,
     metrics: &'a [config::Metric],
-) -> Vec<(&'a config::Metric, Result<f64>)> {
+) -> BatchReadResult<'a> {
     let mut results: Vec<Option<Result<f64>>> = (0..metrics.len()).map(|_| None).collect();
+    let mut read_count: usize = 0;
 
     // Separate register-based metrics (holding/input) from bit-based (coil/discrete).
     let mut holding: Vec<IndexedMetric<'_>> = Vec::new();
@@ -168,6 +199,7 @@ pub async fn batch_read_coalesced<'a>(
     holding.sort_by_key(|im| im.addr);
     let holding_ranges = coalesce(holding);
     for range in holding_ranges {
+        read_count += 1;
         match reader
             .read_holding_registers(range.start, range.count())
             .await
@@ -185,6 +217,7 @@ pub async fn batch_read_coalesced<'a>(
                     "batch holding read failed, falling back to individual reads"
                 );
                 for member in &range.members {
+                    read_count += 1;
                     results[member.idx] = Some(read_single(reader, member.metric).await);
                 }
             }
@@ -195,6 +228,7 @@ pub async fn batch_read_coalesced<'a>(
     input.sort_by_key(|im| im.addr);
     let input_ranges = coalesce(input);
     for range in input_ranges {
+        read_count += 1;
         match reader
             .read_input_registers(range.start, range.count())
             .await
@@ -212,6 +246,7 @@ pub async fn batch_read_coalesced<'a>(
                     "batch input read failed, falling back to individual reads"
                 );
                 for member in &range.members {
+                    read_count += 1;
                     results[member.idx] = Some(read_single(reader, member.metric).await);
                 }
             }
@@ -220,11 +255,12 @@ pub async fn batch_read_coalesced<'a>(
 
     // Read coils/discrete individually
     for (idx, m) in individual {
+        read_count += 1;
         results[idx] = Some(read_single(reader, m).await);
     }
 
     // Build output
-    metrics
+    let results = metrics
         .iter()
         .enumerate()
         .map(|(idx, m)| {
@@ -233,7 +269,11 @@ pub async fn batch_read_coalesced<'a>(
                 .unwrap_or_else(|| Err(anyhow::anyhow!("metric '{}' not processed", m.name)));
             (m, r)
         })
-        .collect()
+        .collect();
+    BatchReadResult {
+        results,
+        read_count,
+    }
 }
 
 #[cfg(test)]
