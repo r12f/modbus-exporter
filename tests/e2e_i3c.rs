@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use bus_exporter::config::{ByteOrder, Config, DataType, MetricConfig, MetricType};
-use bus_exporter::reader::i3c::{AddressMode, I3cClient, I3cDevice};
+use bus_exporter::reader::i3c::{AddressMode, I3cDevice, I3cMetricReader};
 
 // ── Mock Device ─────────────────────────────────────────────────────
 
@@ -149,7 +149,7 @@ collectors:
 #[tokio::test]
 async fn pipeline_u8_metric() {
     let device = MockI3cDevice::fixed(vec![0x42]); // 66
-    let client = I3cClient::new(
+    let client = I3cMetricReader::new(
         Box::new(device),
         "/dev/i3c-0".into(),
         AddressMode::Static(0x30),
@@ -175,7 +175,7 @@ async fn pipeline_u8_metric() {
 async fn pipeline_u16_big_endian_with_scale_offset() {
     // 0x00F5 = 245; 245 * 0.1 + (-40.0) = -15.5
     let device = MockI3cDevice::fixed(vec![0x00, 0xF5]);
-    let client = I3cClient::new(
+    let client = I3cMetricReader::new(
         Box::new(device),
         "/dev/i3c-0".into(),
         AddressMode::Static(0x30),
@@ -201,7 +201,7 @@ async fn pipeline_u16_big_endian_with_scale_offset() {
 async fn pipeline_u16_little_endian() {
     // LE bytes [0x00, 0x01] → 0x0100 = 256
     let device = MockI3cDevice::fixed(vec![0x00, 0x01]);
-    let client = I3cClient::new(
+    let client = I3cMetricReader::new(
         Box::new(device),
         "/dev/i3c-0".into(),
         AddressMode::Static(0x30),
@@ -227,7 +227,7 @@ async fn pipeline_u16_little_endian() {
 async fn pipeline_f32_big_endian() {
     // IEEE 754: 42.0f32 = 0x42280000
     let device = MockI3cDevice::fixed(vec![0x42, 0x28, 0x00, 0x00]);
-    let client = I3cClient::new(
+    let client = I3cMetricReader::new(
         Box::new(device),
         "/dev/i3c-0".into(),
         AddressMode::Static(0x30),
@@ -263,7 +263,7 @@ async fn pipeline_pid_address_mode() {
     // a Static address to exercise the pipeline. The Pid config parsing is
     // already tested above.
     let device = MockI3cDevice::fixed(vec![0xAB]); // 171
-    let client = I3cClient::new(
+    let client = I3cMetricReader::new(
         Box::new(device),
         "/dev/i3c-0".into(),
         AddressMode::Pid("0x0123456789AB".into()),
@@ -295,7 +295,7 @@ async fn pipeline_pid_address_mode() {
 #[tokio::test]
 async fn pipeline_device_class_address_mode() {
     let device = MockI3cDevice::fixed(vec![0x00, 0xC8]); // u16 BE = 200
-    let client = I3cClient::new(
+    let client = I3cMetricReader::new(
         Box::new(device),
         "/dev/i3c-0".into(),
         AddressMode::DeviceClass {
@@ -334,7 +334,7 @@ async fn pipeline_multiple_metrics_sequential() {
     // Two reads: first returns u8=100, second returns u16=0x0200=512
     let responses: Vec<Result<Vec<u8>>> = vec![Ok(vec![0x64]), Ok(vec![0x02, 0x00])];
     let device = MockI3cDevice::new(responses);
-    let client = I3cClient::new(
+    let client = I3cMetricReader::new(
         Box::new(device),
         "/dev/i3c-0".into(),
         AddressMode::Static(0x30),
@@ -367,7 +367,7 @@ fn reenumeration_nack_then_success_static() {
         Ok(vec![0xBE, 0xEF]),
     ];
     let device = MockI3cDevice::new(responses);
-    let mut client = I3cClient::new(
+    let mut client = I3cMetricReader::new(
         Box::new(device),
         "/dev/i3c-0".into(),
         AddressMode::Static(0x30),
@@ -386,7 +386,7 @@ fn reenumeration_all_nack_exhausts_retries() {
         Err(anyhow::anyhow!("NACK")),
     ];
     let device = MockI3cDevice::new(responses);
-    let mut client = I3cClient::new(
+    let mut client = I3cMetricReader::new(
         Box::new(device),
         "/dev/i3c-0".into(),
         AddressMode::Static(0x30),
@@ -407,7 +407,7 @@ async fn async_error_propagation() {
         "sensor offline: device not responding"
     ))];
     let device = MockI3cDevice::new(responses);
-    let client = I3cClient::new(
+    let client = I3cMetricReader::new(
         Box::new(device),
         "/dev/i3c-0".into(),
         AddressMode::Static(0x30),

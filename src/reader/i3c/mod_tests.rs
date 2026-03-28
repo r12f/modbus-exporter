@@ -67,7 +67,7 @@ fn make_metric(
 #[test]
 fn test_static_address_mode() {
     let device = MockI3cDevice::with_fixed_response(vec![0x42]);
-    let mut client = I3cClient::new(
+    let mut client = I3cMetricReader::new(
         Box::new(device),
         "/dev/i3c-0".to_string(),
         AddressMode::Static(0x30),
@@ -79,7 +79,7 @@ fn test_static_address_mode() {
 #[test]
 fn test_pid_address_mode_creation() {
     let device = MockI3cDevice::with_fixed_response(vec![0x42]);
-    let client = I3cClient::new(
+    let client = I3cMetricReader::new(
         Box::new(device),
         "/dev/i3c-0".to_string(),
         AddressMode::Pid("0x0123456789AB".to_string()),
@@ -91,7 +91,7 @@ fn test_pid_address_mode_creation() {
 #[test]
 fn test_device_class_mode_creation() {
     let device = MockI3cDevice::with_fixed_response(vec![0x42]);
-    let client = I3cClient::new(
+    let client = I3cMetricReader::new(
         Box::new(device),
         "/dev/i3c-0".to_string(),
         AddressMode::DeviceClass {
@@ -107,7 +107,7 @@ fn test_device_class_mode_creation() {
 #[test]
 fn test_read_register_static() {
     let device = MockI3cDevice::with_fixed_response(vec![0xAB, 0xCD]);
-    let mut client = I3cClient::new(
+    let mut client = I3cMetricReader::new(
         Box::new(device),
         "/dev/i3c-0".to_string(),
         AddressMode::Static(0x30),
@@ -124,7 +124,7 @@ fn test_nack_triggers_reenumeration() {
     // re-enumeration will also fail. Verify the retry attempt logic.
     let responses: Vec<Result<Vec<u8>>> = vec![Err(anyhow::anyhow!("NACK"))];
     let device = MockI3cDevice::new(responses);
-    let mut client = I3cClient::new(
+    let mut client = I3cMetricReader::new(
         Box::new(device),
         "/dev/i3c-0".to_string(),
         AddressMode::Static(0x30),
@@ -426,7 +426,7 @@ collectors:
 #[tokio::test]
 async fn test_read_i3c_metric_u8() {
     let device = MockI3cDevice::with_fixed_response(vec![0x42]);
-    let client = I3cClient::new(
+    let client = I3cMetricReader::new(
         Box::new(device),
         "/dev/i3c-0".to_string(),
         AddressMode::Static(0x30),
@@ -442,7 +442,7 @@ async fn test_read_i3c_metric_u8() {
 #[tokio::test]
 async fn test_read_i3c_metric_u16_big_endian() {
     let device = MockI3cDevice::with_fixed_response(vec![0x01, 0x00]);
-    let client = I3cClient::new(
+    let client = I3cMetricReader::new(
         Box::new(device),
         "/dev/i3c-0".to_string(),
         AddressMode::Static(0x30),
@@ -458,7 +458,7 @@ async fn test_read_i3c_metric_u16_big_endian() {
 #[tokio::test]
 async fn test_read_i3c_metric_u16_little_endian() {
     let device = MockI3cDevice::with_fixed_response(vec![0x00, 0x01]);
-    let client = I3cClient::new(
+    let client = I3cMetricReader::new(
         Box::new(device),
         "/dev/i3c-0".to_string(),
         AddressMode::Static(0x30),
@@ -475,7 +475,7 @@ async fn test_read_i3c_metric_u16_little_endian() {
 async fn test_read_i3c_metric_f32_big_endian() {
     // IEEE 754: 42.0f32 = 0x42280000
     let device = MockI3cDevice::with_fixed_response(vec![0x42, 0x28, 0x00, 0x00]);
-    let client = I3cClient::new(
+    let client = I3cMetricReader::new(
         Box::new(device),
         "/dev/i3c-0".to_string(),
         AddressMode::Static(0x30),
@@ -491,7 +491,7 @@ async fn test_read_i3c_metric_f32_big_endian() {
 #[tokio::test]
 async fn test_read_i3c_metric_with_scale_offset() {
     let device = MockI3cDevice::with_fixed_response(vec![0x00, 0xF5]); // 245
-    let client = I3cClient::new(
+    let client = I3cMetricReader::new(
         Box::new(device),
         "/dev/i3c-0".to_string(),
         AddressMode::Static(0x30),

@@ -45,7 +45,7 @@ pub enum BusClient {
         device_lock: spi::DeviceLock,
     },
     I3c {
-        client: Arc<tokio::sync::Mutex<i3c::I3cClient>>,
+        client: Arc<tokio::sync::Mutex<i3c::I3cMetricReader>>,
         bus_lock: i3c::BusLock,
     },
 }

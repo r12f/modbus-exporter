@@ -138,7 +138,7 @@ impl BusClientFactory for RealBusClientFactory {
                 #[cfg(not(target_os = "linux"))]
                 let device: Box<dyn reader::i3c::I3cDevice> = Box::new(reader::i3c::StubI3cDevice);
 
-                let client = reader::i3c::I3cClient::new(device, bus.clone(), address_mode);
+                let client = reader::i3c::I3cMetricReader::new(device, bus.clone(), address_mode);
                 let bus_lock = reader::i3c::get_bus_lock(bus);
                 Ok(BusClient::I3c {
                     client: std::sync::Arc::new(tokio::sync::Mutex::new(client)),

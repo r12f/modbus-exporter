@@ -173,13 +173,13 @@ pub enum AddressMode {
 
 // ── Client ──────────────────────────────────────────────────────────
 
-/// I3C client that wraps a device and provides async read operations.
+/// I3C metric reader that wraps a device and provides async read operations.
 ///
-/// Unlike `I2cMetricReader`, the I3C client requires `&mut self` for reads because
-/// dynamic address resolution may need to mutate cached state (e.g. after
-/// NACK-triggered re-enumeration). The client is therefore wrapped in
+/// Unlike `I2cMetricReader`, the I3C metric reader requires `&mut self` for reads
+/// because dynamic address resolution may need to mutate cached state (e.g. after
+/// NACK-triggered re-enumeration). The reader is therefore wrapped in
 /// `Arc<tokio::sync::Mutex<..>>` at the call site.
-pub struct I3cClient {
+pub struct I3cMetricReader {
     device: Arc<std::sync::Mutex<Box<dyn I3cDevice>>>,
     bus_path: String,
     address_mode: AddressMode,
@@ -268,7 +268,7 @@ fn resolve_address_from_sysfs(address_mode: &AddressMode) -> Result<u8> {
     }
 }
 
-impl I3cClient {
+impl I3cMetricReader {
     pub fn new(device: Box<dyn I3cDevice>, bus_path: String, address_mode: AddressMode) -> Self {
         let resolved = match &address_mode {
             AddressMode::Static(addr) => Some(*addr),
@@ -386,7 +386,7 @@ impl I3cClient {
 
 /// Read a single I3C metric.
 pub async fn read_i3c_metric(
-    client: &Arc<tokio::sync::Mutex<I3cClient>>,
+    client: &Arc<tokio::sync::Mutex<I3cMetricReader>>,
     metric: &config::MetricConfig,
     bus_lock: &BusLock,
 ) -> Result<f64> {
