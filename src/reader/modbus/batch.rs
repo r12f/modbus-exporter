@@ -109,7 +109,9 @@ fn decode_metric(metric: &config::Metric, regs: &[u16], range_start: u16) -> Res
 
 /// Read a single metric individually (fallback path).
 async fn read_single(reader: &mut dyn ModbusReader, metric: &config::Metric) -> Result<f64> {
-    let addr = metric.address.ok_or_else(|| anyhow::anyhow!("metric '{}' has no address", metric.name))?;
+    let addr = metric
+        .address
+        .ok_or_else(|| anyhow::anyhow!("metric '{}' has no address", metric.name))?;
     let count = metric.data_type.register_count();
     let register_type = metric.register_type.unwrap_or(RegisterType::Holding);
     let data_type = bus::map_data_type(metric.data_type);
