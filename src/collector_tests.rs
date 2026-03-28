@@ -4,7 +4,7 @@ use crate::config::{
     RegisterType,
 };
 use crate::reader::modbus::{BusConnection, ModbusReader};
-use crate::reader::{MetricReader as MetricReaderTrait, ReaderCapabilities};
+use crate::reader::MetricReader as MetricReaderTrait;
 use anyhow::Result;
 use async_trait::async_trait;
 use std::collections::HashMap;
@@ -18,6 +18,7 @@ struct MockModbusClient {
     fail_after: Arc<Mutex<Option<usize>>>,
     read_count: Arc<Mutex<usize>>,
     connect_fail_count: Arc<Mutex<usize>>,
+    metrics: Vec<MetricConfig>,
 }
 
 impl MockModbusClient {
@@ -28,6 +29,7 @@ impl MockModbusClient {
             fail_after: Arc::new(Mutex::new(None)),
             read_count: Arc::new(Mutex::new(0)),
             connect_fail_count: Arc::new(Mutex::new(0)),
+            metrics: Vec::new(),
         }
     }
 
@@ -107,6 +109,10 @@ impl ModbusReader for MockModbusClient {
 
 #[async_trait]
 impl MetricReaderTrait for MockModbusClient {
+    fn set_metrics(&mut self, metrics: Vec<MetricConfig>) {
+        self.metrics = metrics;
+    }
+
     async fn connect(&mut self) -> Result<()> {
         BusConnection::connect(self).await
     }
@@ -119,12 +125,13 @@ impl MetricReaderTrait for MockModbusClient {
         BusConnection::is_connected(self)
     }
 
-    fn capabilities(&self) -> ReaderCapabilities {
-        ReaderCapabilities { batch_read: false }
-    }
-
-    async fn read(&mut self, metric: &MetricConfig) -> Result<f64> {
-        crate::reader::modbus::read_modbus_metric(self, metric).await
+    async fn read(&mut self) -> HashMap<String, Result<f64>> {
+        let mut results = HashMap::new();
+        for metric in self.metrics.clone() {
+            let result = crate::reader::modbus::read_modbus_metric(self, &metric).await;
+            results.insert(metric.name.clone(), result);
+        }
+        results
     }
 }
 

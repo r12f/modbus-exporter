@@ -448,16 +448,25 @@ fn map_data_type(dt: config::DataType) -> decoder::DataType {
 pub struct I3cMetricReaderHandle {
     client: Arc<tokio::sync::Mutex<I3cMetricReader>>,
     bus_lock: BusLock,
+    metrics: Vec<config::MetricConfig>,
 }
 
 impl I3cMetricReaderHandle {
     pub fn new(client: Arc<tokio::sync::Mutex<I3cMetricReader>>, bus_lock: BusLock) -> Self {
-        Self { client, bus_lock }
+        Self {
+            client,
+            bus_lock,
+            metrics: Vec::new(),
+        }
     }
 }
 
 #[async_trait]
 impl crate::reader::MetricReader for I3cMetricReaderHandle {
+    fn set_metrics(&mut self, metrics: Vec<config::MetricConfig>) {
+        self.metrics = metrics;
+    }
+
     async fn connect(&mut self) -> Result<()> {
         let mut c = self.client.lock().await;
         c.connect().await
@@ -469,20 +478,19 @@ impl crate::reader::MetricReader for I3cMetricReaderHandle {
     }
 
     fn is_connected(&self) -> bool {
-        // If the lock is contended, conservatively report disconnected rather than
-        // silently masking a potential disconnection state.
         self.client
             .try_lock()
             .map(|c| c.is_connected())
             .unwrap_or(false)
     }
 
-    fn capabilities(&self) -> crate::reader::ReaderCapabilities {
-        crate::reader::ReaderCapabilities { batch_read: false }
-    }
-
-    async fn read(&mut self, metric: &config::MetricConfig) -> Result<f64> {
-        read_i3c_metric(&self.client, metric, &self.bus_lock).await
+    async fn read(&mut self) -> HashMap<String, Result<f64>> {
+        let mut results = HashMap::new();
+        for metric in &self.metrics.clone() {
+            let result = read_i3c_metric(&self.client, metric, &self.bus_lock).await;
+            results.insert(metric.name.clone(), result);
+        }
+        results
     }
 }
 

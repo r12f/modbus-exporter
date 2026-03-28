@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use tokio_modbus::client::{rtu, Context as ModbusContext, Reader};
@@ -7,6 +9,7 @@ use tokio_serial::SerialPortBuilder;
 use super::{
     validate_coil_count, validate_register_count, BusConnection, ModbusReader, READ_TIMEOUT,
 };
+use crate::config::MetricConfig;
 
 /// Modbus RTU (serial) metric reader.
 ///
@@ -20,6 +23,7 @@ pub struct ModbusRtuMetricReader {
     builder: SerialPortBuilder,
     slave_id: u8,
     context: Option<ModbusContext>,
+    metrics: Vec<MetricConfig>,
 }
 
 impl ModbusRtuMetricReader {
@@ -29,6 +33,7 @@ impl ModbusRtuMetricReader {
             builder,
             slave_id,
             context: None,
+            metrics: Vec::new(),
         }
     }
 
@@ -171,6 +176,10 @@ impl ModbusReader for ModbusRtuMetricReader {
 
 #[async_trait]
 impl crate::reader::MetricReader for ModbusRtuMetricReader {
+    fn set_metrics(&mut self, metrics: Vec<MetricConfig>) {
+        self.metrics = metrics;
+    }
+
     async fn connect(&mut self) -> Result<()> {
         BusConnection::connect(self).await
     }
@@ -183,26 +192,16 @@ impl crate::reader::MetricReader for ModbusRtuMetricReader {
         BusConnection::is_connected(self)
     }
 
-    fn capabilities(&self) -> crate::reader::ReaderCapabilities {
-        crate::reader::ReaderCapabilities { batch_read: true }
-    }
-
-    async fn read(&mut self, metric: &crate::config::MetricConfig) -> Result<f64> {
-        super::read_modbus_metric(self, metric).await
-    }
-
-    async fn batch_read<'a>(
-        &mut self,
-        metrics: &'a [crate::config::MetricConfig],
-    ) -> crate::reader::BatchReadResult<'a> {
+    async fn read(&mut self) -> HashMap<String, Result<f64>> {
+        let metrics = self.metrics.clone();
         let super::batch::BatchReadResult {
             results,
-            read_count,
-        } = super::batch::batch_read_coalesced(self, metrics).await;
-        crate::reader::BatchReadResult {
-            results,
-            read_count,
-        }
+            read_count: _,
+        } = super::batch::batch_read_coalesced(self, &metrics).await;
+        results
+            .into_iter()
+            .map(|(m, r)| (m.name.clone(), r))
+            .collect()
     }
 }
 

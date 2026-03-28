@@ -103,6 +103,7 @@ pub struct I2cMetricReader {
     address: u8,
     connected: bool,
     bus_lock: BusLock,
+    metrics: Vec<config::MetricConfig>,
 }
 
 /// Per-bus mutex map for serializing access.
@@ -130,6 +131,7 @@ impl I2cMetricReader {
             address,
             connected: false,
             bus_lock,
+            metrics: Vec::new(),
         }
     }
 
@@ -189,6 +191,10 @@ pub async fn read_i2c_metric(
 /// Unified MetricReader implementation for I2C.
 #[async_trait]
 impl crate::reader::MetricReader for I2cMetricReader {
+    fn set_metrics(&mut self, metrics: Vec<config::MetricConfig>) {
+        self.metrics = metrics;
+    }
+
     async fn connect(&mut self) -> Result<()> {
         self.connected = true;
         Ok(())
@@ -203,12 +209,14 @@ impl crate::reader::MetricReader for I2cMetricReader {
         self.connected
     }
 
-    fn capabilities(&self) -> crate::reader::ReaderCapabilities {
-        crate::reader::ReaderCapabilities { batch_read: false }
-    }
-
-    async fn read(&mut self, metric: &config::MetricConfig) -> Result<f64> {
-        read_i2c_metric(self, metric, &Arc::clone(&self.bus_lock)).await
+    async fn read(&mut self) -> HashMap<String, Result<f64>> {
+        let mut results = HashMap::new();
+        let metrics = self.metrics.clone();
+        for metric in &metrics {
+            let result = read_i2c_metric(self, metric, &Arc::clone(&self.bus_lock)).await;
+            results.insert(metric.name.clone(), result);
+        }
+        results
     }
 }
 
