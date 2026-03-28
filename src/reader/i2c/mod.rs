@@ -208,7 +208,7 @@ impl crate::reader::MetricReader for I2cMetricReader {
     }
 
     async fn read(&mut self, metric: &config::MetricConfig) -> Result<f64> {
-        read_i2c_metric(self, metric, &self.bus_lock.clone()).await
+        read_i2c_metric(self, metric, &Arc::clone(&self.bus_lock)).await
     }
 }
 

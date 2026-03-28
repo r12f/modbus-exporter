@@ -207,7 +207,7 @@ impl crate::reader::MetricReader for SpiMetricReader {
     }
 
     async fn read(&mut self, metric: &config::MetricConfig) -> Result<f64> {
-        read_spi_metric(self, metric, &self.device_lock.clone()).await
+        read_spi_metric(self, metric, &Arc::clone(&self.device_lock)).await
     }
 }
 
