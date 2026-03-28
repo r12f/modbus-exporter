@@ -18,6 +18,24 @@ pub struct ReaderCapabilities {
 /// Unified interface for reading metrics from any bus protocol.
 #[async_trait]
 pub trait MetricReader: Send + Sync {
+    // ── Connection ──────────────────────────────────────────────────
+
+    /// Establish the underlying connection/transport.
+    async fn connect(&mut self) -> Result<()>;
+
+    /// Close the underlying connection/transport.
+    async fn disconnect(&mut self) -> Result<()>;
+
+    /// Returns `true` when connected.
+    fn is_connected(&self) -> bool;
+
+    // ── Capabilities ────────────────────────────────────────────────
+
+    /// Returns the capabilities of this reader.
+    fn capabilities(&self) -> ReaderCapabilities;
+
+    // ── Read ────────────────────────────────────────────────────────
+
     /// Read a single metric, returning its numeric value.
     async fn read(&mut self, metric: &MetricConfig) -> Result<f64>;
 
@@ -36,16 +54,4 @@ pub trait MetricReader: Send + Sync {
         }
         results
     }
-
-    /// Establish the underlying connection/transport.
-    async fn connect(&mut self) -> Result<()>;
-
-    /// Close the underlying connection/transport.
-    async fn disconnect(&mut self) -> Result<()>;
-
-    /// Returns `true` when connected.
-    fn is_connected(&self) -> bool;
-
-    /// Returns the capabilities of this reader.
-    fn capabilities(&self) -> ReaderCapabilities;
 }
