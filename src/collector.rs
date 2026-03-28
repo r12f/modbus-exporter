@@ -1,4 +1,3 @@
-use anyhow::Result;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::Arc;
@@ -11,7 +10,7 @@ use tracing::{error, info, instrument, warn};
 use crate::config;
 use crate::internal_metrics::InternalMetrics;
 use crate::metrics::{MetricStore, MetricType, MetricValue};
-use crate::reader::{MetricReader, ReadResults};
+use crate::reader::{MetricReader, MetricReaderFactory, ReadResults};
 
 /// Maximum backoff duration for reconnection attempts.
 const MAX_BACKOFF: Duration = Duration::from_secs(60);
@@ -26,12 +25,6 @@ fn map_metric_type(mt: config::MetricType) -> MetricType {
         config::MetricType::Gauge => MetricType::Gauge,
         config::MetricType::Counter => MetricType::Counter,
     }
-}
-
-/// Factory trait for creating metric readers from config.
-/// This allows tests to inject mock clients.
-pub trait MetricReaderFactory: Send + Sync {
-    fn create(&self, collector: &config::CollectorConfig) -> Result<Box<dyn MetricReader>>;
 }
 
 /// Run a single collector loop. This is the core of each collector task.
