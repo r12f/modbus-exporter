@@ -279,9 +279,7 @@ impl MqttMetricExporter {
         }
 
         let (client, mut eventloop) = AsyncClient::new(mqttoptions, 64);
-        let handle = tokio::spawn(async move {
-            while eventloop.poll().await.is_ok() {}
-        });
+        let handle = tokio::spawn(async move { while eventloop.poll().await.is_ok() {} });
 
         self.client = Some(client);
         self.eventloop_handle = Some(handle);
