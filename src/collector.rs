@@ -181,7 +181,7 @@ async fn run_collector(
                 break;
             }
             Err(e) => {
-                error!(error = %e, backoff_secs = backoff.as_secs(), "connection failed, retrying");
+                warn!(error = %e, backoff_secs = backoff.as_secs(), "connection failed, retrying");
                 tokio::select! {
                     _ = tokio::time::sleep(backoff) => {}
                     _ = shutdown_rx.changed() => {
@@ -346,7 +346,7 @@ async fn run_collector(
                         break;
                     }
                     Err(e) => {
-                        error!(error = %e, backoff_secs = backoff.as_secs(), "reconnect failed");
+                        warn!(error = %e, backoff_secs = backoff.as_secs(), "reconnect failed");
                     }
                 }
             }
