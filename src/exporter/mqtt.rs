@@ -225,6 +225,111 @@ pub async fn run_mqtt_exporter(
     }
 }
 
+// ── MetricExporter trait impl ─────────────────────────────────────────
+
+use crate::config::MetricConfig;
+use async_trait::async_trait;
+
+/// MQTT exporter that implements [`super::MetricExporter`].
+///
+/// Each call to [`export()`] publishes the supplied metrics to the
+/// configured MQTT broker.
+pub struct MqttMetricExporter {
+    config: MqttExporterConfig,
+    client: Option<rumqttc::AsyncClient>,
+    eventloop_handle: Option<tokio::task::JoinHandle<()>>,
+}
+
+impl MqttMetricExporter {
+    pub fn new(config: MqttExporterConfig) -> anyhow::Result<Self> {
+        if config.endpoint.is_none() {
+            anyhow::bail!("MQTT exporter has no endpoint configured");
+        }
+        Ok(Self {
+            config,
+            client: None,
+            eventloop_handle: None,
+        })
+    }
+
+    async fn ensure_connected(&mut self) -> anyhow::Result<()> {
+        if self.client.is_some() {
+            return Ok(());
+        }
+
+        let endpoint = self.config.endpoint.as_ref().unwrap();
+        let (host, port, use_tls) = parse_endpoint(endpoint);
+        let client_id = self
+            .config
+            .client_id
+            .clone()
+            .unwrap_or_else(|| "bus-exporter-trait".to_string());
+
+        let mut mqttoptions = MqttOptions::new(&client_id, &host, port);
+        mqttoptions.set_keep_alive(self.config.timeout);
+
+        if let Some(auth) = &self.config.auth {
+            mqttoptions.set_credentials(&auth.username, &auth.password);
+        }
+
+        if use_tls {
+            let tls_config =
+                build_tls_config(self.config.tls.as_ref()).map_err(|e| anyhow::anyhow!(e))?;
+            mqttoptions.set_transport(Transport::tls_with_config(tls_config));
+        }
+
+        let (client, mut eventloop) = AsyncClient::new(mqttoptions, 64);
+        let handle = tokio::spawn(async move {
+            while eventloop.poll().await.is_ok() {}
+        });
+
+        self.client = Some(client);
+        self.eventloop_handle = Some(handle);
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl super::MetricExporter for MqttMetricExporter {
+    async fn export(
+        &mut self,
+        metrics: &[MetricConfig],
+        results: &std::collections::HashMap<String, anyhow::Result<f64>>,
+    ) -> anyhow::Result<()> {
+        self.ensure_connected().await?;
+        let qos = qos_from_u8(self.config.qos);
+        let retain = self.config.retain;
+        let prefix = self.config.topic_prefix.clone();
+
+        for cfg in metrics {
+            let value = match results.get(&cfg.name) {
+                Some(Ok(v)) => *v,
+                _ => continue,
+            };
+            let topic = build_topic(&prefix, "collector", &cfg.name);
+            let payload = format_value(value);
+            self.client
+                .as_ref()
+                .unwrap()
+                .publish(&topic, qos, retain, payload.as_bytes())
+                .await
+                .map_err(|e| anyhow::anyhow!("MQTT publish failed: {e}"))?;
+        }
+        Ok(())
+    }
+
+    async fn shutdown(&mut self) -> anyhow::Result<()> {
+        if let Some(client) = self.client.take() {
+            let _ = client.disconnect().await;
+        }
+        if let Some(handle) = self.eventloop_handle.take() {
+            handle.abort();
+            let _ = handle.await;
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 #[path = "mqtt_tests.rs"]
 mod tests;
