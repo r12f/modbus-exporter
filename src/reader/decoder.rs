@@ -266,3 +266,33 @@ pub fn decode(
 #[cfg(test)]
 #[path = "decoder_tests.rs"]
 mod decoder_tests;
+
+// ── Config → decoder mappings (moved from bus.rs) ─────────────────────
+
+use crate::config;
+
+/// Map config byte order to decoder byte order.
+pub fn map_byte_order(bo: config::ByteOrder) -> ByteOrder {
+    match bo {
+        config::ByteOrder::BigEndian => ByteOrder::BigEndian,
+        config::ByteOrder::LittleEndian => ByteOrder::LittleEndian,
+        config::ByteOrder::MidBigEndian => ByteOrder::MidBigEndian,
+        config::ByteOrder::MidLittleEndian => ByteOrder::MidLittleEndian,
+    }
+}
+
+/// Map config data type to decoder data type.
+pub fn map_data_type(dt: config::DataType) -> DataType {
+    match dt {
+        config::DataType::U8 => DataType::U8,
+        config::DataType::U16 => DataType::U16,
+        config::DataType::I16 => DataType::I16,
+        config::DataType::U32 => DataType::U32,
+        config::DataType::I32 => DataType::I32,
+        config::DataType::F32 => DataType::F32,
+        config::DataType::U64 => DataType::U64,
+        config::DataType::I64 => DataType::I64,
+        config::DataType::F64 => DataType::F64,
+        config::DataType::Bool => DataType::Bool,
+    }
+}

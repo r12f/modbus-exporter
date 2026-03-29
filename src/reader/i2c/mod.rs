@@ -3,9 +3,8 @@ use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::bus;
+use super::decoder;
 use crate::config;
-use crate::decoder;
 
 /// Type alias for the shared bus lock (std Mutex for use in spawn_blocking).
 pub type BusLock = Arc<std::sync::Mutex<()>>;
@@ -151,8 +150,8 @@ pub async fn read_i2c_metric(
     metric: &config::MetricConfig,
     bus_lock: &BusLock,
 ) -> Result<f64> {
-    let data_type = bus::map_data_type(metric.data_type);
-    let byte_order = bus::map_byte_order(metric.byte_order);
+    let data_type = decoder::map_data_type(metric.data_type);
+    let byte_order = decoder::map_byte_order(metric.byte_order);
 
     // address validated as present and in u8 range by config
     let register = metric.address.unwrap() as u8;

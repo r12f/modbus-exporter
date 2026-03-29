@@ -4,8 +4,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::warn;
 
+use super::decoder;
 use crate::config;
-use crate::decoder;
 
 /// Type alias for the shared bus lock (std Mutex for use in spawn_blocking).
 pub type BusLock = Arc<std::sync::Mutex<()>>;
