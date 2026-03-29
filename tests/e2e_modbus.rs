@@ -4,6 +4,7 @@
 //! config generation, pull execution, and validation. Only the Modbus TCP
 //! simulator (protocol-specific mock) lives here.
 
+#[allow(dead_code)]
 mod common;
 
 use std::collections::HashMap;

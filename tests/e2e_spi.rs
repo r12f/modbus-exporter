@@ -7,6 +7,7 @@
 //! **Requirements:** `/dev/spidev*` device accessible (typically requires root).
 //! The test is marked `#[ignore]` and skips gracefully when no spidev device is found.
 
+#[allow(dead_code)]
 mod common;
 
 use common::{ConnectionParams, TestFixtures, TestMetric};

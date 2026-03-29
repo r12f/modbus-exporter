@@ -5,6 +5,7 @@
 //!
 //! Requires `socat` and the `serialport` crate's system deps to be installed.
 
+#[allow(dead_code)]
 mod common;
 
 use std::collections::HashMap;
