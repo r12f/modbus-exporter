@@ -178,6 +178,7 @@ dependencies = [
  "dashmap",
  "futures",
  "futures-util",
+ "humantime",
  "humantime-serde",
  "indexmap",
  "libc",
