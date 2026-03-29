@@ -41,7 +41,7 @@ loop {
     for (metric_name, result) in read_results {
         match result {
             Ok((_raw, scaled)) => {
-                local_cache.insert(metric_name, MetricValue { value: scaled, .. });
+                local_cache.insert(metric_name, MetricValue { value: scaled, /* ... */ });
             },
             Err(e) => {
                 had_error = true;

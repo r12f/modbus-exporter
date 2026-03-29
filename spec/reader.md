@@ -74,6 +74,8 @@ Protocol-specific optimizations (e.g., Modbus register coalescing) are handled i
 | [SPI](spi.md) | None | Single-device reads |
 | [I3C](i3c.md) | None | Single-device reads |
 
+> **Note:** Non-Modbus readers (I2C, SPI, I3C) always return `metrics.len()` for `io_count`, since each metric requires a separate I/O operation (no coalescing).
+
 ## Source Layout
 
 ```text

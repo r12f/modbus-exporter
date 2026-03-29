@@ -38,7 +38,7 @@ Internal metrics are exported under a separate scope (`bus-exporter-internal`).
 
 ## Retry Behavior
 
-Retry behavior is delegated to the OpenTelemetry SDK defaults. The exporter does not implement custom retry logic (no 1s→2s→4s→30s backoff). The SDK's built-in retry and timeout handling applies.
+Retry behavior is delegated to the OpenTelemetry SDK defaults (exponential backoff with jitter: 5 second initial interval, maximum 30 second interval, up to 5 retry attempts — per the OTLP exporter specification). The exporter does not implement custom retry logic. The SDK's built-in retry and timeout handling applies.
 
 ## Configuration
 

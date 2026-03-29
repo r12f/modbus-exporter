@@ -43,17 +43,15 @@ bus-exporter/
 │   └── testing.md
 ├── src/
 │   ├── main.rs
+│   ├── main_tests.rs
 │   ├── lib.rs
 │   ├── config.rs
 │   ├── config_tests.rs
 │   ├── collector.rs
 │   ├── collector_tests.rs
-│   ├── config.rs
-│   ├── config_tests.rs
 │   ├── install.rs
 │   ├── internal_metrics.rs
 │   ├── internal_metrics_tests.rs
-│   ├── lib.rs
 │   ├── logging.rs
 │   ├── logging_tests.rs
 │   ├── metrics.rs
