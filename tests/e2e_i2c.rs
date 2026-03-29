@@ -7,6 +7,7 @@
 //! **Requirements:** root privileges, `i2c-stub` kernel module available.
 //! The test is marked `#[ignore]` and skips gracefully when prerequisites are missing.
 
+#[allow(dead_code)]
 mod common;
 
 use common::{ConnectionParams, TestFixtures, TestMetric};
