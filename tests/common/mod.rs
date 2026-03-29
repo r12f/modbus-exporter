@@ -45,7 +45,8 @@ pub struct TestFixtures {
     pub metrics: Vec<TestMetric>,
 }
 
-/// Standard test fixtures covering all supported data types.
+/// Standard test fixtures covering common data types (u16, i16, u32, f32, bool).
+/// Not exhaustive — does not include u8, i32, u64, i64, f64 variants.
 pub fn standard_fixtures() -> TestFixtures {
     TestFixtures {
         metrics: vec![
@@ -160,6 +161,21 @@ pub enum ConnectionParams {
     },
 }
 
+/// Escape a string value for safe embedding in YAML.
+fn yaml_escape(s: &str) -> String {
+    if s.contains([
+        '"', '\'', ':', '#', '{', '}', '[', ']', ',', '&', '*', '?', '|', '-', '<', '>', '=', '!',
+        '%', '@', '\\', '\n',
+    ]) || s.starts_with(' ')
+        || s.ends_with(' ')
+        || s.is_empty()
+    {
+        format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
+    } else {
+        s.to_string()
+    }
+}
+
 /// Generate a bus-exporter YAML config and write it to `dir/config.yaml`.
 /// Returns the path to the written config file.
 pub fn generate_config(
@@ -192,9 +208,10 @@ pub fn generate_config(
     let mut metrics_yaml = String::new();
     for m in &fixtures.metrics {
         metrics_yaml.push_str(&format!(
-            "      - name: {}\n        description: \"{}\"\n        type: {}\n        register_type: {}\n        address: {}\n        data_type: {}\n        byte_order: {}\n        scale: {}\n        offset: {}\n        unit: \"{}\"\n",
-            m.name, m.description, m.metric_type, m.register_type, m.address,
-            m.data_type, m.byte_order, m.scale, m.offset, m.unit,
+            "      - name: {}\n        description: {}\n        type: {}\n        register_type: {}\n        address: {}\n        data_type: {}\n        byte_order: {}\n        scale: {}\n        offset: {}\n        unit: {}\n",
+            yaml_escape(m.name), yaml_escape(m.description), yaml_escape(m.metric_type),
+            yaml_escape(m.register_type), m.address, yaml_escape(m.data_type),
+            yaml_escape(m.byte_order), m.scale, m.offset, yaml_escape(m.unit),
         ));
     }
 
@@ -240,23 +257,27 @@ pub struct PullResult {
 
 /// Find the bus-exporter binary. Uses the cargo-built debug binary.
 fn find_binary() -> PathBuf {
-    // `cargo test` puts the binary in target/debug/
+    let binary_name = if cfg!(windows) {
+        "bus-exporter.exe"
+    } else {
+        "bus-exporter"
+    };
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("target");
     path.push("debug");
-    path.push("bus-exporter");
+    path.push(binary_name);
     if path.exists() {
         return path;
     }
     // Fallback: assume it's on PATH
-    PathBuf::from("bus-exporter")
+    PathBuf::from(binary_name)
 }
 
 /// Run `bus-exporter pull -c <config>` and parse the JSON output.
 pub async fn run_pull(config_path: &Path) -> PullResult {
     let binary = find_binary();
     let output = Command::new(&binary)
-        .args(["pull", "-c", config_path.to_str().unwrap()])
+        .args(["pull", "-c", &config_path.to_string_lossy()])
         .output()
         .await
         .unwrap_or_else(|e| panic!("failed to run bus-exporter binary at {:?}: {}", binary, e));
@@ -309,13 +330,14 @@ pub fn validate_with_tolerance(result: &PullResult, fixtures: &TestFixtures, tol
         .as_array()
         .expect("expected 'collectors' array in pull output");
 
-    // Build a map of metric_name → value from all collectors
-    let mut actual_values: std::collections::HashMap<String, Option<f64>> =
+    // Build a map of (collector_index, metric_name) → value to avoid
+    // overwrites when duplicate metric names exist across collectors.
+    let mut actual_values: std::collections::HashMap<(usize, String), Option<f64>> =
         std::collections::HashMap::new();
-    let mut actual_errors: std::collections::HashMap<String, Option<String>> =
+    let mut actual_errors: std::collections::HashMap<(usize, String), Option<String>> =
         std::collections::HashMap::new();
 
-    for collector in collectors {
+    for (ci, collector) in collectors.iter().enumerate() {
         let metrics = collector["metrics"]
             .as_array()
             .expect("expected 'metrics' array in collector");
@@ -323,35 +345,48 @@ pub fn validate_with_tolerance(result: &PullResult, fixtures: &TestFixtures, tol
             let name = metric["name"].as_str().unwrap().to_string();
             let value = metric["value"].as_f64();
             let error = metric["error"].as_str().map(|s| s.to_string());
-            actual_values.insert(name.clone(), value);
-            actual_errors.insert(name, error);
+            actual_values.insert((ci, name.clone()), value);
+            actual_errors.insert((ci, name), error);
         }
     }
 
     for fixture in &fixtures.metrics {
         let name = fixture.name;
-        let actual = actual_values
-            .get(name)
-            .unwrap_or_else(|| panic!("metric '{}' not found in pull output", name));
+        let matching: Vec<_> = actual_values
+            .iter()
+            .filter(|((_, n), _)| n == name)
+            .collect();
 
-        // Check for errors
-        if let Some(Some(err)) = actual_errors.get(name) {
-            panic!("metric '{}' has error: {}", name, err);
-        }
-
-        let actual_val = actual.unwrap_or_else(|| {
-            panic!("metric '{}' has null value in pull output", name);
-        });
-
-        let diff = (actual_val - fixture.expected_value).abs();
         assert!(
-            diff <= tolerance,
-            "metric '{}': expected {}, got {} (diff={}, tolerance={})",
-            name,
-            fixture.expected_value,
-            actual_val,
-            diff,
-            tolerance,
+            !matching.is_empty(),
+            "metric '{}' not found in pull output",
+            name
         );
+
+        for ((ci, _), actual) in &matching {
+            let key = (*ci, name.to_string());
+            if let Some(Some(err)) = actual_errors.get(&key) {
+                panic!("metric '{}' (collector {}) has error: {}", name, ci, err);
+            }
+
+            let actual_val = actual.unwrap_or_else(|| {
+                panic!(
+                    "metric '{}' (collector {}) has null value in pull output",
+                    name, ci
+                );
+            });
+
+            let diff = (actual_val - fixture.expected_value).abs();
+            assert!(
+                diff <= tolerance,
+                "metric '{}' (collector {}): expected {}, got {} (diff={}, tolerance={})",
+                name,
+                ci,
+                fixture.expected_value,
+                actual_val,
+                diff,
+                tolerance,
+            );
+        }
     }
 }

@@ -40,20 +40,35 @@ impl SimulatorService {
             match m.register_type {
                 "holding" => {
                     for (i, &val) in m.raw_registers.iter().enumerate() {
-                        holding.insert(m.address + i as u16, val);
+                        let addr = m
+                            .address
+                            .checked_add(i as u16)
+                            .expect("register address overflow in fixture");
+                        holding.insert(addr, val);
                     }
                 }
                 "input" => {
                     for (i, &val) in m.raw_registers.iter().enumerate() {
-                        input.insert(m.address + i as u16, val);
+                        let addr = m
+                            .address
+                            .checked_add(i as u16)
+                            .expect("register address overflow in fixture");
+                        input.insert(addr, val);
                     }
                 }
                 "coil" => {
                     for (i, &val) in m.raw_registers.iter().enumerate() {
-                        coils.insert(m.address + i as u16, val != 0);
+                        let addr = m
+                            .address
+                            .checked_add(i as u16)
+                            .expect("register address overflow in fixture");
+                        coils.insert(addr, val != 0);
                     }
                 }
-                _ => {}
+                other => panic!(
+                    "unrecognized register_type '{}' in fixture '{}'",
+                    other, m.name
+                ),
             }
         }
 
@@ -65,20 +80,26 @@ impl SimulatorService {
     }
 
     fn read_holding(&self, addr: u16, count: u16) -> Vec<u16> {
-        (addr..addr + count)
-            .map(|a| self.holding.get(&a).copied().unwrap_or(0))
+        let start = addr as u32;
+        let end = start + count as u32;
+        (start..end)
+            .map(|a| self.holding.get(&(a as u16)).copied().unwrap_or(0))
             .collect()
     }
 
     fn read_input(&self, addr: u16, count: u16) -> Vec<u16> {
-        (addr..addr + count)
-            .map(|a| self.input.get(&a).copied().unwrap_or(0))
+        let start = addr as u32;
+        let end = start + count as u32;
+        (start..end)
+            .map(|a| self.input.get(&(a as u16)).copied().unwrap_or(0))
             .collect()
     }
 
     fn read_coils(&self, addr: u16, count: u16) -> Vec<bool> {
-        (addr..addr + count)
-            .map(|a| self.coils.get(&a).copied().unwrap_or(false))
+        let start = addr as u32;
+        let end = start + count as u32;
+        (start..end)
+            .map(|a| self.coils.get(&(a as u16)).copied().unwrap_or(false))
             .collect()
     }
 }
