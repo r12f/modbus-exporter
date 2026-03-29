@@ -163,6 +163,13 @@ pub enum ConnectionParams {
         bus: String,
         address: u8,
     },
+    #[allow(dead_code)]
+    Spi {
+        device: String,
+        speed_hz: u32,
+        mode: u8,
+        bits_per_word: u8,
+    },
 }
 
 /// Generate a bus-exporter YAML config and write it to `dir/config.yaml`.
@@ -197,7 +204,19 @@ pub fn generate_config(
                 "    protocol:\n      type: i2c\n      bus: \"{}\"\n      address: {}",
                 bus, address
             ),
-            None, // slave_id is a Modbus-only concept, omit for I2C
+            None,
+        ),
+        ConnectionParams::Spi {
+            device,
+            speed_hz,
+            mode,
+            bits_per_word,
+        } => (
+            format!(
+                "    protocol:\n      type: spi\n      device: \"{}\"\n      speed_hz: {}\n      mode: {}\n      bits_per_word: {}",
+                device, speed_hz, mode, bits_per_word
+            ),
+            None,
         ),
     };
 
