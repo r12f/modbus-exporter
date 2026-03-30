@@ -109,6 +109,11 @@ When a connection fails or is lost:
 - An error counter is incremented per metric.
 - Errors are logged at `warn` level.
 
+### Write Step Errors (`init_writes` / `pre_poll`)
+
+- **`init_writes` failure**: Treated as a connection-level error. The collector enters reconnect/backoff. `init_writes` will be re-executed after reconnect.
+- **`pre_poll` failure**: The current poll cycle is **skipped** (no metrics are read). Logged at `warn` level. The next poll cycle will retry `pre_poll` from scratch. If `pre_poll` fails 3 consecutive times, treated as a connection-level error (triggers reconnect/backoff).
+
 ### Per-Collector Errors
 
 - Connection-level failures (timeout, disconnect) affect all metrics.
