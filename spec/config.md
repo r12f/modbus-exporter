@@ -144,15 +144,15 @@ collectors:
       - address: 0x72
         value: 0x01              # humidity oversampling x1
       - address: 0x74
-        value: 0x25              # temp x1, pressure x1, sleep mode
+        value: 0x24              # temp x1, pressure x1, sleep mode
     pre_poll:
       - address: 0x74
-        value: 0x26              # forced mode trigger
+        value: 0x25              # forced mode trigger (sleep → forced)
       - delay: "50ms"            # wait for measurement
     metrics:
       - name: temperature
         type: gauge
-        address: 0xFA
+        address: 0x22            # BME680 temp MSB register
         data_type: u16
         byte_order: big_endian
         scale: 0.01

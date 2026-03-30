@@ -33,10 +33,10 @@ collectors:
       - address: 0xF2
         value: 0x01           # humidity oversampling x1
       - address: 0xF4
-        value: 0x25           # temp x1, pressure x1, sleep mode
+        value: 0x24           # temp x1, pressure x1, sleep mode
     pre_poll:                 # optional: trigger before each read cycle
       - address: 0xF4
-        value: 0x26           # forced mode
+        value: 0x25           # forced mode trigger (sleep → forced)
       - delay: "50ms"         # wait for conversion
     metrics:
       - name: temperature
