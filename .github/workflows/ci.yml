@@ -50,8 +50,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: sudo apt-get update && sudo apt-get install -y libudev-dev
-      - name: Run native E2E tests
-        run: cargo test --test 'e2e_*' -- --nocapture
+      - name: Install otelcol-contrib
+        run: make e2e-init
+      - name: Run all E2E tests
+        run: make e2e-all
 
   docker:
     runs-on: ubuntu-latest

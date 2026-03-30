@@ -1,4 +1,4 @@
-.PHONY: build run fmt lint test docker e2e e2e-init e2e-otlp clean
+.PHONY: build run fmt lint test docker e2e e2e-init e2e-all clean
 
 build:
 	cargo build --release
@@ -29,10 +29,10 @@ e2e-init:  ## Install otelcol-contrib for OTLP e2e tests
 	curl -fsSL "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v$(OTELCOL_VERSION)/otelcol-contrib_$(OTELCOL_VERSION)_linux_$${ARCH}.tar.gz" \
 		| sudo tar xz -C /usr/local/bin otelcol-contrib
 	@otelcol-contrib --version
-	@echo "Done. Run 'make e2e-otlp' to execute the OTLP e2e test."
+	@echo "Done. Run 'make e2e-all' to execute all e2e tests."
 
-e2e-otlp:  ## Run OTLP e2e test (requires otelcol-contrib — install via 'make e2e-init')
-	cargo test --test e2e_otlp -- --nocapture --ignored
+e2e-all:  ## Run all E2E tests including ignored ones (requires otelcol-contrib — install via 'make e2e-init')
+	cargo test --test 'e2e_*' -- --nocapture --include-ignored
 
 clean:
 	cargo clean
