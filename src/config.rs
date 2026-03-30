@@ -48,10 +48,10 @@ pub enum Command {
     },
     /// Show resolved configuration
     ShowConfig {
-        /// Filter collectors by name (substring match)
+        /// Filter collectors by name (regex, partial match)
         #[arg(long)]
         collector: Option<String>,
-        /// Filter metrics by name (substring match)
+        /// Filter metrics by name (regex, partial match)
         #[arg(long)]
         metric: Option<String>,
         /// Output format: yaml (default) or json
@@ -270,7 +270,17 @@ pub struct MqttExporterConfig {
 #[serde(deny_unknown_fields)]
 pub struct MqttAuthConfig {
     pub username: String,
+    #[serde(serialize_with = "serialize_redacted")]
     pub password: String,
+}
+
+/// Custom serializer that emits `"***"` instead of the actual value.
+/// Use on any field containing passwords, tokens, or secrets.
+pub fn serialize_redacted<S: serde::Serializer>(
+    _value: &str,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    serializer.serialize_str("***")
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -387,7 +397,7 @@ pub struct CollectorConfig {
     pub pre_poll: Vec<WriteStep>,
     #[serde(default)]
     pub labels: HashMap<String, String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing)]
     pub metrics_files: Option<Vec<String>>,
     #[serde(default)]
     pub metrics: Vec<MetricConfig>,
