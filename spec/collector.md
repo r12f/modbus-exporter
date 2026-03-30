@@ -30,10 +30,20 @@ This strict **producer/consumer separation** ensures:
 // CancellationToken for cooperative shutdown inside read()
 let cancel = CancellationToken::new();
 
+// Execute init_writes once at startup (I2C/SPI/I3C only)
+if !collector.init_writes.is_empty() {
+    client.execute_writes(&collector.init_writes).await?;
+}
+
 loop {
     let start = Instant::now();
     let mut local_cache = HashMap::new();
     let mut had_error = false;
+
+    // Execute pre_poll writes before each read cycle (I2C/SPI/I3C only)
+    if !collector.pre_poll.is_empty() {
+        client.execute_writes(&collector.pre_poll).await?;
+    }
 
     // Batch read all metrics via reader — returns ReadResults
     let ReadResults { metrics: read_results, io_count } = client.read(&cancel).await;
@@ -84,6 +94,7 @@ When a connection fails or is lost:
 2. Wait with exponential backoff: 1s → 2s → 4s → 8s → … → max 60s.
 3. Reset backoff to 1s after a successful poll cycle.
 4. During backoff, the collector task is sleeping (not consuming CPU).
+5. After reconnect, re-execute `init_writes` before resuming the poll loop.
 
 ## Error Handling
 

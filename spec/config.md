@@ -97,11 +97,72 @@ See [export-mqtt.md](export-mqtt.md) for full MQTT export specification.
 | `protocol` | `Protocol` | Yes | — | Connection protocol |
 | `slave_id` | `u8` | Modbus only | — | Modbus slave/unit ID (1-247). Not used for I2C/SPI/I3C. |
 | `polling_interval` | `string` | No | `"10s"` | Poll interval (duration string) |
+| `init_writes` | `list<WriteStep>` | No | `[]` | Register writes executed once at startup/reconnect. I2C/SPI/I3C only. See [Register Writes](#register-writes). |
+| `pre_poll` | `list<WriteStep>` | No | `[]` | Register writes executed before each poll cycle. I2C/SPI/I3C only. See [Register Writes](#register-writes). |
 | `labels` | `map<string, string>` | No | `{}` | Labels for all metrics in this collector |
 | `metrics_files` | `list<string>` | No | `[]` | Paths to metrics definition files (see [Metrics Files](#metrics-files)) |
 | `metrics` | `list<Metric>` | No | `[]` | Inline metric definitions |
 
 A collector must have at least one metric after merging `metrics_files` and `metrics`.
+
+### Register Writes
+
+`init_writes` and `pre_poll` allow register writes for device initialization and measurement triggering. **Only valid for I2C, SPI, and I3C collectors** — a validation error is raised if set on Modbus collectors.
+
+#### WriteStep (I2C / I3C)
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `address` | `u16` | Conditional | — | Register address to write (omit for delay-only steps) |
+| `value` | `u8 \| list<u8>` | Conditional | — | Byte(s) to write. Required if `address` is set. Single integer or list for multi-byte. |
+| `delay` | `string` | No | — | Duration to wait after this step (e.g., `"50ms"`, `"1s"`) |
+
+A step must have at least one of `address`+`value` or `delay`. A step with both writes first, then waits.
+
+#### WriteStep (SPI)
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `command` | `list<u8>` | Conditional | — | Bytes to transmit (omit for delay-only steps) |
+| `delay` | `string` | No | — | Duration to wait after this step |
+
+For SPI, `command` replaces `address`+`value` (SPI has no register addressing).
+
+#### Example: BME680 on I2C
+
+```yaml
+collectors:
+  - name: "bme680"
+    protocol:
+      type: i2c
+      bus: "/dev/i2c-1"
+      address: 0x76
+    polling_interval: "5s"
+    init_writes:
+      - address: 0x72
+        value: 0x01              # humidity oversampling x1
+      - address: 0x74
+        value: 0x25              # temp x1, pressure x1, sleep mode
+    pre_poll:
+      - address: 0x74
+        value: 0x26              # forced mode trigger
+      - delay: "50ms"            # wait for measurement
+    metrics:
+      - name: temperature
+        type: gauge
+        address: 0xFA
+        data_type: u16
+        byte_order: big_endian
+        scale: 0.01
+        offset: -40.0
+        unit: "°C"
+```
+
+#### Validation
+
+- `init_writes` and `pre_poll` on Modbus TCP/RTU collectors → **validation error**.
+- Each step must have at least `address`+`value` (I2C/I3C), `command` (SPI), or `delay`.
+- `delay` values must be valid duration strings and ≤ 10s (to prevent blocking the poll loop).
 
 ### Protocol
 

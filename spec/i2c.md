@@ -29,6 +29,15 @@ collectors:
       bus: "/dev/i2c-1"     # I2C bus device path
       address: 0x76          # 7-bit device address (hex or decimal)
     polling_interval: "5s"
+    init_writes:              # optional: one-time setup on startup/reconnect
+      - address: 0xF2
+        value: 0x01           # humidity oversampling x1
+      - address: 0xF4
+        value: 0x25           # temp x1, pressure x1, sleep mode
+    pre_poll:                 # optional: trigger before each read cycle
+      - address: 0xF4
+        value: 0x26           # forced mode
+      - delay: "50ms"         # wait for conversion
     metrics:
       - name: temperature
         type: gauge
@@ -68,6 +77,22 @@ I2C read follows the standard **write-register-then-read** pattern:
 
 1. **Write** the register address byte to the device.
 2. **Read** N bytes from the device.
+
+## Write Operations
+
+I2C writes are used by `init_writes` and `pre_poll` (see [config.md](config.md#register-writes)):
+
+1. **Write** the register address byte followed by the value byte(s).
+
+Many sensors require writes to configure operating modes, oversampling, or trigger measurements before registers contain valid data. Common patterns:
+
+| Sensor | Init Writes | Pre-Poll |
+|--------|------------|----------|
+| BME280/BME680 | Set oversampling registers | Trigger forced mode |
+| ADS1115 | Configure multiplexer, gain, rate | Start conversion |
+| SHT31 | — | Send measurement command |
+
+See the collector `init_writes` / `pre_poll` fields for the full schema.
 
 Byte counts by data type:
 
