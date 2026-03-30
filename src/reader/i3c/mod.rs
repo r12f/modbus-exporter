@@ -6,6 +6,7 @@ use tracing::warn;
 
 use super::decoder;
 use crate::config;
+use crate::config::WriteStep;
 
 /// Type alias for the shared bus lock (std Mutex for use in spawn_blocking).
 pub type BusLock = Arc<std::sync::Mutex<()>>;
@@ -306,6 +307,18 @@ impl I3cMetricReader {
         }
     }
 
+    /// Write bytes to a resolved I3C device address. Used by I3cMetricWriter.
+    pub fn write_bytes(&mut self, buf: &[u8]) -> Result<()> {
+        let dev_addr = self.resolve_address()?;
+        let mut dev = self
+            .device
+            .lock()
+            .map_err(|e| anyhow::anyhow!("device lock poisoned: {e}"))?;
+        dev.write_read(dev_addr, buf, 0)
+            .context("I3C write_bytes")?;
+        Ok(())
+    }
+
     /// Read bytes from a register on the I3C device with NACK retry logic.
     ///
     /// Takes `&mut self` (unlike I2C's `&self`) because dynamic address
@@ -503,6 +516,47 @@ impl crate::reader::MetricReader for I3cMetricReaderHandle {
             metrics: results,
             io_count,
         }
+    }
+}
+
+/// I3C metric writer for executing write steps (init_writes / pre_poll).
+pub struct I3cMetricWriter {
+    client: Arc<tokio::sync::Mutex<I3cMetricReader>>,
+    bus_lock: BusLock,
+}
+
+impl I3cMetricWriter {
+    pub fn new(client: Arc<tokio::sync::Mutex<I3cMetricReader>>, bus_lock: BusLock) -> Self {
+        Self { client, bus_lock }
+    }
+}
+
+#[async_trait]
+impl crate::reader::MetricWriter for I3cMetricWriter {
+    async fn execute_writes(&mut self, steps: &[WriteStep]) -> Result<()> {
+        for (idx, step) in steps.iter().enumerate() {
+            if let (Some(address), Some(value)) = (step.address, &step.value) {
+                let mut buf = vec![address];
+                buf.extend_from_slice(&value.as_bytes());
+                let client = Arc::clone(&self.client);
+                let bus_lock = self.bus_lock.clone();
+                tokio::task::spawn_blocking(move || -> Result<()> {
+                    let _lock = bus_lock
+                        .lock()
+                        .map_err(|e| anyhow::anyhow!("bus lock poisoned: {e}"))?;
+                    let mut c = client.blocking_lock();
+                    c.write_bytes(&buf)
+                        .with_context(|| format!("I3C write step {}", idx))?;
+                    Ok(())
+                })
+                .await
+                .context("spawn_blocking join error")??;
+            }
+            if let Some(delay) = step.delay {
+                tokio::time::sleep(delay).await;
+            }
+        }
+        Ok(())
     }
 }
 
